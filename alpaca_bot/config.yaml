@@ -1,0 +1,107 @@
+# config.yaml
+
+app:
+  name: "AI Trading Bot"
+  environment: "development"
+  # Single source of truth for paper vs live. Change by hand only.
+  trading_mode: "paper"            # "paper" | "live"
+  log_level: "INFO"
+
+broker:
+  provider: "alpaca"
+  base_currency: "USD"
+  # Bot refuses to start if the API keys don't match trading_mode
+  # (e.g. live keys while trading_mode is "paper").
+  verify_keys_match_mode: true
+
+market:
+  asset_classes:
+    - "stocks"
+    - "crypto"
+  stock_symbols:
+    - "AAPL"
+    - "NVDA"
+    - "SPY"
+  crypto_symbols:
+    - "BTC/USD"
+    - "ETH/USD"
+  timeframe: "15Min"
+  historical_lookback_days: 365
+  refresh_seconds: 60              # how often to poll for new data
+  act_on_closed_bars_only: true    # only generate signals when a bar closes
+
+strategy:
+  name: "trend_momentum"
+  allow_short_selling: false
+  indicators:
+    - "SMA_20"
+    - "SMA_50"
+    - "RSI_14"
+    - "ATR_14"
+  # Signal score is normalized to 0.0–1.0
+  #   >= buy_threshold  -> buy signal
+  #   <= sell_threshold -> sell signal
+  #   in between        -> hold
+  buy_threshold: 0.70
+  sell_threshold: 0.30
+  require_signal_confirmation: true   # signal must hold for 2 consecutive closed bars
+  confirmation_bars: 2
+
+ai:
+  enabled: false
+  provider: "openai"
+  model: null
+  sentiment_enabled: false
+  require_structured_output: true
+  ai_controls_order_execution: false
+  on_error: "hold"                 # timeout / bad output -> hold, never guess
+  timeout_seconds: 20
+
+risk:
+  # Note: max_position_pct is the binding cap on position size.
+  max_position_pct: 5.0
+  max_total_exposure_pct: 30.0
+  max_open_positions: 5
+  risk_per_trade_pct: 0.5
+  stop_loss:
+    method: "atr"                  # "atr" | "percent"
+    atr_multiplier: 2.0            # stop = entry - 2 x ATR_14
+    max_pct: 2.0                   # never wider than 2% (also used if method = "percent")
+  take_profit:
+    method: "risk_multiple"        # "risk_multiple" | "percent"
+    risk_multiple: 2.0             # target = 2x the stop distance
+    pct: 4.0                       # used if method = "percent"
+  max_daily_loss_pct: 2.0
+  max_drawdown_pct: 10.0
+  kill_switch:
+    enabled: true
+    on_daily_loss_limit:
+      block_new_trades: true
+      close_positions: false
+      reset: "next_trading_day"    # automatic reset
+    on_max_drawdown:
+      block_new_trades: true
+      close_positions: true
+      reset: "manual"              # you must reset it yourself
+
+execution:
+  max_order_value_usd: 500
+  require_risk_approval: true
+  allow_duplicate_orders: false
+  stocks:
+    enforce_market_hours: true
+    order_type: "market"
+    time_in_force: "day"
+  crypto:
+    enforce_market_hours: false    # crypto trades 24/7
+    order_type: "limit"            # avoid bad fills on wide spreads
+    limit_offset_pct: 0.1          # limit price this far from last price
+    time_in_force: "gtc"           # Alpaca crypto supports gtc / ioc, not day
+    cancel_unfilled_after_minutes: 15
+
+backtest:
+  initial_capital: 10000
+  commission_pct: 0.1
+  slippage_pct: 0.05
+  benchmark: "SPY"
+  prevent_lookahead_bias: true
