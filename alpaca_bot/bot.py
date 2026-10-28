@@ -2,6 +2,7 @@
 
 Usage:
   export APCA_API_KEY_ID=... APCA_API_SECRET_KEY=...
+  export GMAIL_ADDRESS=you@gmail.com GMAIL_APP_PASSWORD=...   # optional: email alerts to yourself
   python bot.py run                 # trading loop (paper or live, per app.trading_mode)
   python bot.py backtest            # backtest each symbol over historical_lookback_days
   python bot.py reset-kill-switch   # clear a max-drawdown halt (manual reset)
@@ -13,8 +14,11 @@ import logging
 import math
 import os
 import re
+import smtplib
 import time
+import traceback
 from datetime import UTC, datetime, timedelta
+from email.message import EmailMessage
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +29,24 @@ import yaml
 HERE = Path(__file__).parent
 STATE_FILE = HERE / "state.json"
 log = logging.getLogger("bot")
+_last_alert = {}
+
+
+def notify(subject, body="", cooldown=3600):
+    """Email yourself via Gmail (needs an app password). No-op unless both env vars are set."""
+    addr, password = os.environ.get("GMAIL_ADDRESS"), os.environ.get("GMAIL_APP_PASSWORD")
+    if not addr or not password or time.time() - _last_alert.get(subject, 0) < cooldown:
+        return
+    _last_alert[subject] = time.time()
+    msg = EmailMessage()
+    msg["Subject"], msg["From"], msg["To"] = f"[trading bot] {subject}", addr, addr
+    msg.set_content(body or subject)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as smtp:
+            smtp.login(addr, password)
+            smtp.send_message(msg)
+    except Exception:
+        log.exception("alert email failed")  # never let alerting stop trading
 
 
 # ---------- config ----------
@@ -254,12 +276,18 @@ class Bot:
             )
             if ks["on_max_drawdown"]["close_positions"]:
                 self.trading.close_all_positions(cancel_orders=True)
+            notify("KILL SWITCH: max drawdown hit", f"Drawdown {dd:.2f}%. Trading halted.")
         if state.get("halted"):
             return ks["on_max_drawdown"]["block_new_trades"]
         # last_equity is the previous session's close, so this resets next trading day by itself.
         daily = 100 * (last_equity - equity) / last_equity
         if daily >= r["max_daily_loss_pct"]:
             log.warning("daily loss %.2f%% hit: no new trades today", daily)
+            notify(
+                f"daily loss limit hit {datetime.now(UTC).date()}",
+                f"Down {daily:.2f}% today.",
+                86400,
+            )
             if ks["on_daily_loss_limit"]["close_positions"] and positions:
                 self.trading.close_all_positions(cancel_orders=True)
             return ks["on_daily_loss_limit"]["block_new_trades"]
@@ -272,6 +300,7 @@ class Bot:
         # Market exit for certainty; if bracket legs are still cancelling, this fails and retries.
         self.trading.close_position(symbol.replace("/", ""))
         log.info("exit %s", symbol)
+        notify(f"exit {symbol}", cooldown=0)
 
     def enter(self, symbol, price, atr, equity, exposure, n_open, state):
         """Returns the notional ordered (0 if skipped)."""
@@ -317,6 +346,7 @@ class Bot:
                 "target": target,
             }
         log.info("buy %s qty=%s ~%.2f stop=%.2f target=%.2f", symbol, qty, price, stop, target)
+        notify(f"buy {symbol}", f"qty={qty} ~{price:.2f} stop={stop:.2f} target={target:.2f}", 0)
         return qty * price
 
     def step(self):
@@ -385,15 +415,19 @@ class Bot:
                         n_open += 1
             except Exception:
                 log.exception("error on %s", symbol)
+                notify(f"error on {symbol}", traceback.format_exc())
         save_state(state)
 
     def run(self):
-        log.info("starting in %s mode: %s", self.cfg["app"]["trading_mode"].upper(), self.symbols)
+        mode = self.cfg["app"]["trading_mode"].upper()
+        log.info("starting in %s mode: %s", mode, self.symbols)
+        notify(f"bot started in {mode} mode", cooldown=0)
         while True:
             try:
                 self.step()
             except Exception:
                 log.exception("step failed; retrying next loop")
+                notify("step failed", traceback.format_exc())
             time.sleep(self.cfg["market"]["refresh_seconds"])
 
 

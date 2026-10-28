@@ -132,3 +132,35 @@ def test_live_keys_refused_in_paper_mode(monkeypatch):
     monkeypatch.setenv("APCA_API_SECRET_KEY", "x")
     with pytest.raises(SystemExit, match="do not match"):
         bot.Bot(CFG)
+
+
+def test_notify_emails_self_with_cooldown(monkeypatch):
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            assert (host, port) == ("smtp.gmail.com", 465)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+        def login(self, user, password):
+            assert password == "app-pw"
+
+        def send_message(self, msg):
+            sent.append(msg)
+
+    monkeypatch.setattr(bot.smtplib, "SMTP_SSL", FakeSMTP)
+    monkeypatch.setattr(bot, "_last_alert", {})
+    bot.notify("no creds")
+    assert sent == []
+    monkeypatch.setenv("GMAIL_ADDRESS", "me@gmail.com")
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "app-pw")
+    bot.notify("step failed", "trace")
+    bot.notify("step failed", "trace again")  # within cooldown: suppressed
+    bot.notify("buy AAPL", cooldown=0)
+    assert [m["Subject"] for m in sent] == ["[trading bot] step failed", "[trading bot] buy AAPL"]
+    assert sent[0]["To"] == sent[0]["From"] == "me@gmail.com"
