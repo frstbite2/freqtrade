@@ -1,0 +1,10 @@
+# AI trading platform (backend/). Independent of freqtrade's requirements.txt.
+fastapi==0.162.5
+uvicorn==0.54.0
+SQLAlchemy==2.1.8
+pydantic==2.14.3
+PyYAML==6.0.3
+psycopg[binary]==3.3.2
+# testing
+pytest==9.2.0
+httpx==0.28.1

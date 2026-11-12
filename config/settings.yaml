@@ -1,0 +1,8 @@
+# Non-secret application settings. Secrets (API keys) belong in .env only;
+# unknown keys here are rejected at startup.
+# Env overrides: APP_ENV, DATABASE_URL, LOG_LEVEL, SEC_USER_AGENT.
+environment: development
+trading_mode: paper        # the only mode; live trading is gated separately (Milestone 7)
+database_url: sqlite:///data/platform.sqlite
+log_level: INFO
+log_json: true

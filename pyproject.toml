@@ -288,6 +288,10 @@ extend-ignore = [
 "freqtrade/freqai/**/*.py" = [
   "S311",  # Standard pseudo-random generators are not suitable for cryptographic purposes
 ]
+"backend/tests/**.py" = [
+  "S101",  # allow assert in tests
+  "S105",  # test tokens are not real secrets
+]
 "tests/**.py" = [
   "S101",  # allow assert in tests
   "S104",  #  Possible binding to all interfaces

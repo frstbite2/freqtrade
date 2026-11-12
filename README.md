@@ -1,3 +1,27 @@
+# AI Trading Platform (this fork)
+
+This fork adds a standalone, paper-trading-only AI trading research platform in `backend/`,
+next to the upstream freqtrade crypto bot (documented below, unchanged). Status, architecture,
+roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Milestone 1 of 10
+(foundation) is complete** — there is no market data, analysis or trading yet.
+
+```bash
+# Local (SQLite)
+python3 -m venv .venv && .venv/bin/pip install -r requirements-platform.txt
+cd backend && ../.venv/bin/pytest && cd ..
+API_AUTH_TOKEN=dev .venv/bin/uvicorn --factory backend.main:create_app
+curl localhost:8000/health
+curl -H "Authorization: Bearer dev" localhost:8000/api/v1/status
+
+# Docker (API + TimescaleDB)
+cp .env.example .env    # then set API_AUTH_TOKEN and POSTGRES_PASSWORD
+docker compose -f docker-compose.platform.yml up -d --build
+```
+
+Settings live in `config/*.yaml`; secrets only in `.env` (never committed).
+
+---
+
 # ![freqtrade](https://raw.githubusercontent.com/freqtrade/freqtrade/develop/docs/assets/freqtrade_poweredby.svg)
 
 [![Freqtrade CI](https://github.com/freqtrade/freqtrade/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/freqtrade/freqtrade/actions/workflows/ci.yml)

@@ -1,0 +1,38 @@
+# CLAUDE.md
+
+Two codebases live here:
+
+- `freqtrade/`, `tests/`, `docs/`, `docker-compose.yml`, `requirements*.txt` — upstream freqtrade
+  (crypto bot). Leave it untouched unless explicitly asked.
+- `backend/`, `config/`, `docker-compose.platform.yml`, `docker/Dockerfile.platform`,
+  `requirements-platform.txt` — the AI trading platform. It does not import freqtrade.
+
+Read `PROJECT_STATUS.md` first: audit, architecture, roadmap, required APIs, known shortcuts.
+Update it whenever a milestone item is completed or deferred.
+
+## Commands
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements-platform.txt
+cd backend && ../.venv/bin/pytest          # platform tests (own pytest.ini)
+.venv/bin/ruff check backend && .venv/bin/ruff format backend
+API_AUTH_TOKEN=dev .venv/bin/uvicorn --factory backend.main:create_app --reload
+docker compose -f docker-compose.platform.yml up -d --build   # needs .env (see .env.example)
+```
+
+## Rules
+
+- One milestone at a time; tests pass before moving on. Never claim something works untested.
+- Paper trading only. `trading_mode: live` must stay a validation error until the user
+  explicitly authorizes the Milestone 7 live gate.
+- The risk engine is independent; the decision engine can never override hard limits.
+- Secrets come from environment variables only. Never in YAML, code, logs, or API responses.
+  New secrets are registered in `SECRET_ENV_VARS` (`backend/core/config.py`) so they are redacted,
+  and added to `.env.example` with an empty placeholder.
+- Never fabricate market data, filings, or results. If a provider is not configured, report
+  "unavailable" — distinct from zero activity. No silent simulated-data fallbacks.
+- Store the public-availability timestamp with every external record; backtests may only use data
+  available at the simulated time.
+- Scores are research rankings, not probabilities. Disclosed insider/13F data is delayed public
+  disclosure — never describe it as illegal activity or as current holdings.
+- Create `backend/services/<engine>/` only when implementing that engine; no placeholder modules.

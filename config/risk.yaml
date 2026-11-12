@@ -1,0 +1,11 @@
+# Hard risk limits. The AI decision engine can never override these.
+# Percentages are of current portfolio equity.
+risk_per_trade_pct: 0.5
+max_daily_loss_pct: 2.0
+max_weekly_loss_pct: 5.0
+max_drawdown_pct: 15.0
+max_open_positions: 5
+max_portfolio_exposure_pct: 50.0
+max_asset_exposure_pct: 10.0
+consecutive_losses_before_cooldown: 3
+cooldown_minutes: 60
