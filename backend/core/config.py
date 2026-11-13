@@ -90,6 +90,7 @@ class AppConfig(_Strict):
     # Alpaca data feed. "iex" is the free feed: real-time, but one exchange only, so its
     # volumes are a small share of the market. "sip" (all exchanges) needs a paid plan.
     alpaca_feed: Literal["iex", "sip", "delayed_sip"] = "iex"
+    api_rate_limit_per_minute: int = Field(120, ge=1, le=10_000)  # per client address
 
 
 class Settings(_Strict):

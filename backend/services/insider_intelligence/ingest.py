@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.core.config import get_settings
 from backend.core.logging import setup_logging
 from backend.database.session import init_db, make_engine
+from backend.models import record_audit
 from backend.models.insider import InsiderFiling, InsiderIssuer, InsiderTransaction
 from backend.services.edgar import (
     EdgarClient,
@@ -105,7 +106,21 @@ def ingest_issuer(session: Session, client: EdgarClient, ticker: str, since: dat
     issuer.ticker, issuer.name = ticker, name
     issuer.history_since = min(issuer.history_since, since)
     issuer.last_ingested_at = datetime.now(UTC)
-    session.commit()
+    issuer.failed_filings = len(report.failed)
+    record_audit(  # commits the issuer row with it
+        session,
+        "ingest",
+        "insider.ingest",
+        ticker=ticker,
+        cik=cik,
+        since=since.isoformat(),
+        listed=report.listed,
+        stored=report.stored,
+        reclassified=report.reclassified,
+        other_issuer=report.other_issuer,
+        without_xml=len(report.no_xml),
+        failed=report.failed,
+    )
     return report
 
 

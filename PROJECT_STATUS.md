@@ -105,13 +105,15 @@ the one thing blocking verification of M2, and are needed again for M7.
 | Structured JSON logging with secret redaction | `backend/core/logging.py` | unit test; observed in container logs |
 | Database engine, `audit_log` table | `backend/database/`, `backend/models/` | tests on SQLite; manual run on TimescaleDB (pg16) |
 | API: `/health`, `/api/v1/status`, `/api/v1/config`, bearer auth (fails closed) | `backend/api/routes.py`, `backend/main.py` | API tests; curl against the running container |
+| Rate limit per client address, applied before authentication (`api_rate_limit_per_minute`, default 120) | `backend/api/routes.py` | API test with a controlled clock |
 | Startup/shutdown audit, graceful shutdown | `backend/main.py` | test; `audit_log` rows observed in Postgres |
 | Docker stack (API + TimescaleDB) | `docker-compose.platform.yml`, `docker/Dockerfile.platform` | built and run; see caveat |
 
-Caveat on the Docker verification: the development sandbox intercepts TLS, so the image was
-built from a temporary copy of the Dockerfile with two extra lines trusting the sandbox CA.
-The committed Dockerfile has not itself been built on a normal network, and has not been rebuilt
-since Milestone 4 added code.
+Docker verification, repeated on 2026-11-13 with all code through Milestone 2: the stack starts
+on TimescaleDB, creates all six tables, answers on every endpoint, and the full test suite passes
+inside the image (Python 3.12). Caveat: the development sandbox intercepts TLS, so the image was
+built from a temporary copy of the Dockerfile with two extra lines trusting the sandbox CA. The
+committed Dockerfile is otherwise identical but has not itself been built on a normal network.
 
 ## 5a. Milestone 4 — insider intelligence (complete, with stated limits)
 
@@ -122,7 +124,7 @@ since Milestone 4 added code.
 | EDGAR client: declared User-Agent, 8 requests/s throttle, retry with backoff, permanent cache for filings, TTL cache for indexes, URL/path validation | `backend/services/edgar.py` |
 | Parser for Forms 3, 4, 5 and amendments, with field-level validation | `backend/services/insider_intelligence/parser.py` |
 | Classification and signal eligibility | `backend/services/insider_intelligence/classify.py` |
-| Idempotent ingestion, per-filing atomic writes, failure reporting, re-classification on rule change | `backend/services/insider_intelligence/ingest.py` |
+| Idempotent ingestion, per-filing atomic writes, failure reporting, re-classification on rule change, an `audit_log` entry per run | `backend/services/insider_intelligence/ingest.py` |
 | Point-in-time reads, amendment and duplicate resolution, joint-filer grouping | `backend/services/insider_intelligence/history.py` |
 | Insider activity score 0-100 with explanations | `backend/services/insider_intelligence/scoring.py` |
 | Verification against SEC's own data sets | `backend/services/insider_intelligence/verify.py` |
@@ -173,7 +175,8 @@ Rules that came from reading real filings, each covered by a test on the filing 
 | Same pipeline on PostgreSQL 16 / TimescaleDB | Exact decimals, UTC timestamps, identical scores |
 | Acceptance timestamps | SEC index time confirmed as true UTC against filing headers in both standard and daylight time |
 | Hand-computed checks | Nike April 2026 cluster: 4 insiders, $2,734,230.20; Intel August 2024: holdings increase 2.0% over 631,307 shares reported |
-| Automated tests | 101 offline tests; parsing, classification, ingestion and scoring run on 26 real filings stored unmodified. 4 opt-in live tests, including a byte-for-byte comparison of a fixture with what EDGAR serves |
+| Index paging for a heavy filer, live | JPMorgan's index spans 73 pages; reading back to 2023 took 29 requests and returned 488 ownership filings with no duplicates |
+| Automated tests | 112 offline tests; parsing, classification, ingestion and scoring run on 26 real filings stored unmodified, and the verification tool on SEC's real data-set rows for three of them. 4 opt-in live tests, including a byte-for-byte comparison of a fixture with what EDGAR serves |
 
 Reproduce: `python -m backend.services.insider_intelligence.verify <quarter>_form345.zip`
 (needs `SEC_USER_AGENT`), and `EDGAR_LIVE_TESTS=1 pytest -m live`.
@@ -181,6 +184,9 @@ Reproduce: `python -m backend.services.insider_intelligence.verify <quarter>_for
 SEC's data set itself differs from the filings in three documented ways (two-decimal rounding,
 optional fields shifted between rows, joint filers' roles merged); `verify.py` explains how each
 is handled. The original filing is treated as the source of truth.
+
+If an ingestion run cannot store a filing, the count is kept on the issuer, returned as
+`missing_filings` by both endpoints, and the score's explanation says the history is incomplete.
 
 ### Partially complete
 
@@ -317,7 +323,8 @@ needs network access to `data.alpaca.markets`.
 - SQLite stores decimals as floating point (about 15 significant digits); PostgreSQL is exact.
 - Redis is not in the stack. The price cache is the database; add Redis only when something
   needs shared short-lived state (for example streaming quotes or job coordination).
-- No rate limiting on the API yet (single-user, bound to localhost); add before any non-local exposure.
+- The API rate limit counts requests inside one process. Before running several workers or
+  exposing the API beyond localhost, move it to a shared store or a reverse proxy.
 - Uvicorn's own access log lines are plain text, not JSON (they contain no secrets).
 - Single shared bearer token rather than user accounts; revisit with the dashboard (M9).
 - No database backup job yet; add with deployment docs (M10).

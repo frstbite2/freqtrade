@@ -2,15 +2,16 @@
 
 import logging
 import os
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from sqlalchemy.orm import sessionmaker
 
 from backend import __version__
 from backend.api.insider import router as insider_router
 from backend.api.market import router as market_router
-from backend.api.routes import public, v1
+from backend.api.routes import public, rate_limit, v1
 from backend.core.config import Settings, get_settings
 from backend.core.logging import setup_logging
 from backend.database.session import init_db, make_engine
@@ -42,7 +43,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine.dispose()
         logger.info("platform stopped")
 
-    app = FastAPI(title="AI Trading Platform", version=__version__, lifespan=lifespan)
+    app = FastAPI(
+        title="AI Trading Platform",
+        version=__version__,
+        lifespan=lifespan,
+        dependencies=[Depends(rate_limit)],
+    )
+    app.state.request_times = defaultdict(deque)
     app.state.settings = settings
     app.state.engine = engine
     app.state.sessions = sessions

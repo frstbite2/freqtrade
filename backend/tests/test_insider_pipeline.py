@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 
 from backend.core.config import load_settings
 from backend.main import create_app
+from backend.models import AuditLog
 from backend.models.insider import InsiderFiling, InsiderIssuer, InsiderTransaction
 from backend.services.edgar import EdgarClient, EdgarError
 from backend.services.insider_intelligence import classify
@@ -161,10 +162,21 @@ def test_one_bad_download_does_not_lose_or_corrupt_the_rest(db_session, tmp_path
     assert db_session.get(InsiderFiling, bad) is None
     assert count(db_session, InsiderTransaction) > 0
 
+    # The hole is recorded and every consumer of the score is told about it.
+    assert db_session.get(InsiderIssuer, NKE).failed_filings == 1
+    warned = score_issuer(db_session, NKE, at("2026-04-30T00:00:00"))
+    assert warned["missing_filings"] == 1 and "history is incomplete" in warned["explanation"]
+    audit = db_session.scalars(select(AuditLog).where(AuditLog.action == "insider.ingest")).one()
+    assert (audit.actor, audit.detail["ticker"], audit.detail["stored"]) == ("ingest", "NKE", 9)
+    assert list(audit.detail["failed"]) == [bad]
+
     outage["on"] = False  # the error page was not cached, so the next run recovers
     retry = ingest_issuer(db_session, client, "NKE", SINCE)
     assert (retry.stored, retry.failed) == (1, {})
     assert db_session.get(InsiderFiling, bad) is not None
+    assert db_session.get(InsiderIssuer, NKE).failed_filings == 0
+    healed = score_issuer(db_session, NKE, at("2026-04-30T00:00:00"))
+    assert healed["missing_filings"] == 0 and "incomplete" not in healed["explanation"]
 
 
 def test_document_that_contradicts_the_index_is_not_stored(db_session, tmp_path):

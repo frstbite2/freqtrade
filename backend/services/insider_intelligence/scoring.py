@@ -231,6 +231,11 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
                 f" Discretionary sales of ${sell_value:,.0f} in the same period scale the score "
                 f"by {buy_share:.2f}."
             )
+    if issuer.failed_filings:
+        explanation += (
+            f" Warning: {issuer.failed_filings} filing(s) could not be ingested, "
+            "so this history is incomplete."
+        )
     return {
         "cik": cik,
         "ticker": issuer.ticker,
@@ -246,6 +251,7 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
         "evidence": [transaction_dict(t) for t in buys + sells],
         "history_since": issuer.history_since.isoformat(),
         "last_ingested_at": issuer.last_ingested_at.isoformat(),
+        "missing_filings": issuer.failed_filings,
         "disclaimer": DISCLAIMER,
     }
 

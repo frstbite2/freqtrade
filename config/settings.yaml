@@ -7,3 +7,4 @@ database_url: sqlite:///data/platform.sqlite
 log_level: INFO
 log_json: true
 alpaca_feed: iex            # iex (free, one exchange) | sip (paid, whole market) | delayed_sip
+api_rate_limit_per_minute: 120   # per client address; applies before authentication

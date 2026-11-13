@@ -152,3 +152,28 @@ def test_health_reports_unreachable_database(client):
     client.app.state.engine = create_engine("sqlite:////nonexistent-dir/x.sqlite")
     r = client.get("/health")
     assert r.status_code == 503 and r.json()["database"] == "unreachable"
+
+
+def test_rate_limit_applies_before_authentication(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/r.sqlite")
+    (tmp_path / "settings.yaml").write_text("api_rate_limit_per_minute: 3\n")
+    clock = [1000.0]
+    monkeypatch.setattr("backend.api.routes.time.monotonic", lambda: clock[0])
+    wrong = {"Authorization": "Bearer guess"}
+    with TestClient(create_app(load_settings(tmp_path))) as c:
+        assert [c.get("/api/v1/status", headers=wrong).status_code for _ in range(3)] == [401] * 3
+        blocked = c.get("/api/v1/status", headers={"Authorization": f"Bearer {TOKEN}"})
+        assert blocked.status_code == 429 and blocked.headers["Retry-After"] == "60"
+        assert c.get("/health").status_code == 429  # one budget for every route
+        clock[0] += 59
+        assert c.get("/health").status_code == 429
+        clock[0] += 1  # the oldest requests leave the 60-second window
+        assert (
+            c.get("/api/v1/status", headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 200
+        )
+
+
+def test_rate_limit_must_be_positive(tmp_path):
+    (tmp_path / "settings.yaml").write_text("api_rate_limit_per_minute: 0\n")
+    with pytest.raises(ValidationError):
+        load_settings(tmp_path)

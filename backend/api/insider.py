@@ -72,6 +72,7 @@ def transactions(
             "cik": issuer.cik,
             "history_since": issuer.history_since.isoformat(),
             "last_ingested_at": issuer.last_ingested_at.isoformat(),
+            "missing_filings": issuer.failed_filings,
             "total": len(rows),
             "transactions": [transaction_dict(t) for t in rows[:limit]],
             "disclaimer": DISCLAIMER,

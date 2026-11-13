@@ -32,6 +32,8 @@ class InsiderIssuer(Base):
     name: Mapped[str] = mapped_column(Text)
     history_since: Mapped[date] = mapped_column(Date)  # filings filed on/after this are held
     last_ingested_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    # Filings the last ingestion listed but could not store. Above zero, the history has holes.
+    failed_filings: Mapped[int]
 
 
 class InsiderFiling(Base):
