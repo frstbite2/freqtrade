@@ -87,6 +87,9 @@ class AppConfig(_Strict):
     sec_user_agent: str | None = None
     # Raw SEC responses; filing documents are immutable and kept forever.
     edgar_cache_dir: str = "data/edgar_cache"
+    # Alpaca data feed. "iex" is the free feed: real-time, but one exchange only, so its
+    # volumes are a small share of the market. "sip" (all exchanges) needs a paid plan.
+    alpaca_feed: Literal["iex", "sip", "delayed_sip"] = "iex"
 
 
 class Settings(_Strict):

@@ -22,7 +22,10 @@ docker compose -f docker-compose.platform.yml up -d --build   # needs .env (see 
 # Insider filings (needs SEC_USER_AGENT="Name email@example.com" and access to sec.gov)
 .venv/bin/python -m backend.services.insider_intelligence.ingest NKE AAPL --since 2023-01-01
 .venv/bin/python -m backend.services.insider_intelligence.verify 2024q3_form345.zip --sample 300
-cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live
+cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live -k edgar
+
+# Market data: live verification is PENDING until Alpaca keys exist
+cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.venv/bin/pytest -m live -k alpaca
 ```
 
 ## Rules
@@ -44,5 +47,8 @@ cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live
 - Test parsing and classification on real filings. To add one, save the document byte-for-byte in
   `backend/tests/fixtures/edgar/` with its index metadata in `manifest.json`; never edit a fixture.
 - Any change to `classify.py` rules must bump `CLASSIFIER_VERSION`, so stored rows are re-classified.
+- Tests without real data must say so at the top of the file. The Alpaca adapter stays marked
+  "live verification pending" in code and in PROJECT_STATUS.md until `test_alpaca_live.py` has passed.
+- Reuse `backend/core/http.py` (retry, request spacing) for any new provider.
 - Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
   withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

@@ -10,13 +10,14 @@ import json
 import logging
 import os
 import re
-import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 import httpx
+
+from backend.core.http import RetriesExhausted, Throttle, get_with_retry
 
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,6 @@ ALLOWED_HOSTS = ("https://www.sec.gov/", "https://data.sec.gov/")
 OWNERSHIP_FORMS = frozenset({"3", "4", "5", "3/A", "4/A", "5/A"})
 _ACCESSION = re.compile(r"^\d{10}-\d{2}-\d{6}$")
 _DOCUMENT = re.compile(r"^[A-Za-z0-9_.\-]+$")
-_RETRY_STATUS = {429, 500, 502, 503, 504}
 
 
 class EdgarError(Exception):
@@ -75,11 +75,12 @@ class EdgarClient:
             transport=transport,
         )
         self._cache_dir = Path(cache_dir)
-        self._min_interval = min_interval
+        self._throttle = Throttle(min_interval)
         self._max_attempts = max_attempts
-        self._lock = threading.Lock()
-        self._last_request = 0.0
-        self.requests_made = 0
+
+    @property
+    def requests_made(self) -> int:
+        return self._throttle.requests_made
 
     def close(self) -> None:
         self._http.close()
@@ -108,40 +109,23 @@ class EdgarClient:
         return body
 
     def _fetch(self, url: str) -> bytes:
-        error = "no attempt made"
-        for attempt in range(self._max_attempts):
-            with self._lock:
-                wait = self._min_interval - (time.monotonic() - self._last_request)
-                if wait > 0:
-                    time.sleep(wait)
-                self._last_request = time.monotonic()
-                self.requests_made += 1
-            delay = 2.0**attempt
-            try:
-                response = self._http.get(url)
-            except httpx.TransportError as exc:
-                error = f"{type(exc).__name__}: {exc}"
-            else:
-                if response.status_code == 200:
-                    if not response.content:
-                        raise EdgarError(f"empty response from {url}")
-                    return response.content
-                if response.status_code == 404:
-                    raise EdgarNotFound(url)
-                if response.status_code == 403:
-                    # SEC answers 403 to a missing/blocked User-Agent and to rate-limit bans.
-                    # Retrying only extends a ban, so stop immediately.
-                    raise EdgarError(f"SEC refused the request (403) for {url}")
-                if response.status_code not in _RETRY_STATUS:
-                    raise EdgarError(f"unexpected status {response.status_code} for {url}")
-                error = f"status {response.status_code}"
-                retry_after = response.headers.get("Retry-After", "")
-                if retry_after.isdigit():
-                    delay = max(delay, float(retry_after))
-            if attempt + 1 < self._max_attempts:
-                logger.warning("EDGAR %s for %s; retrying in %.0fs", error, url, delay)
-                time.sleep(delay)
-        raise EdgarError(f"{url} failed after {self._max_attempts} attempts: {error}")
+        try:
+            response = get_with_retry(
+                self._http, url, self._throttle, max_attempts=self._max_attempts
+            )
+        except RetriesExhausted as exc:
+            raise EdgarError(str(exc)) from exc
+        if response.status_code == 404:
+            raise EdgarNotFound(url)
+        if response.status_code == 403:
+            # SEC answers 403 to a missing/blocked User-Agent and to rate-limit bans.
+            # Retrying only extends a ban, so it is never retried.
+            raise EdgarError(f"SEC refused the request (403) for {url}")
+        if response.status_code != 200:
+            raise EdgarError(f"unexpected status {response.status_code} for {url}")
+        if not response.content:
+            raise EdgarError(f"empty response from {url}")
+        return response.content
 
     def _json(self, url: str, max_age: float) -> dict:
         try:

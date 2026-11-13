@@ -3,7 +3,8 @@
 This fork adds a standalone, paper-trading-only AI trading research platform in `backend/`,
 next to the upstream freqtrade crypto bot (documented below, unchanged). Status, architecture,
 roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: foundation
-and SEC insider-filing intelligence.** There is no trading yet.
+and SEC insider-filing intelligence, both verified. A market-data adapter for Alpaca is built
+but has not yet been verified against the live service (needs API keys).** There is no trading yet.
 
 ```bash
 # Local (SQLite)
@@ -28,6 +29,14 @@ curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/insider/NKE/transacti
 ```
 
 Scores are research rankings of disclosed insider buying, not predictions.
+
+Prices need Alpaca keys (free paper keys work) in `.env`; without them the API answers
+"unavailable" rather than inventing data:
+
+```bash
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/market/AAPL/bars?timeframe=1d"
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/market/AAPL/quote"
+```
 
 Settings live in `config/*.yaml`; secrets only in `.env` (never committed).
 

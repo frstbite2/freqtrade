@@ -1,6 +1,6 @@
 # AI Trading Platform — Project Status
 
-Last updated: 2026-11-13 · Milestones complete: **1, 4** · In progress: **2**
+Last updated: 2026-11-13 · Complete and verified: **1, 4** · Built, live verification pending: **2**
 
 Milestone 4 (insider filings) was done before Milestone 2 (market data) at the owner's request,
 because SEC EDGAR needs no API key and could be verified against real data immediately.
@@ -82,12 +82,12 @@ Principles enforced in code, not just documented:
 
 Provider terms, quotas and prices change — re-check each one when its milestone starts.
 **No API keys are configured yet.** SEC EDGAR is in use and needs none. Alpaca paper keys are
-needed to verify M2 against live data and for M7.
+the one thing blocking verification of M2, and are needed again for M7.
 
 ## 4. Roadmap
 
 - [x] **M1 Foundation** — structure, config, logging, database, API, tests, Docker
-- [ ] **M2 Market data** — provider adapter interface, Alpaca adapter, normalization, cache, integrity checks
+- [~] **M2 Market data** — built and unit-tested; **verification against live Alpaca is pending API keys**
 - [ ] **M3 Technical analysis** — indicators, candlestick/chart patterns, market structure
 - [x] **M4 Insider intelligence** — EDGAR client, Forms 3/4/5 parsing, classification, scoring, history
 - [ ] **M5 Institutional + options** — 13F diffs, 13D/13G, unusual options activity, scoring
@@ -173,7 +173,7 @@ Rules that came from reading real filings, each covered by a test on the filing 
 | Same pipeline on PostgreSQL 16 / TimescaleDB | Exact decimals, UTC timestamps, identical scores |
 | Acceptance timestamps | SEC index time confirmed as true UTC against filing headers in both standard and daylight time |
 | Hand-computed checks | Nike April 2026 cluster: 4 insiders, $2,734,230.20; Intel August 2024: holdings increase 2.0% over 631,307 shares reported |
-| Automated tests | 118 offline tests on 26 real filings stored unmodified; 4 opt-in live tests, including a byte-for-byte comparison of a fixture with what EDGAR serves |
+| Automated tests | 101 offline tests; parsing, classification, ingestion and scoring run on 26 real filings stored unmodified. 4 opt-in live tests, including a byte-for-byte comparison of a fixture with what EDGAR serves |
 
 Reproduce: `python -m backend.services.insider_intelligence.verify <quarter>_form345.zip`
 (needs `SEC_USER_AGENT`), and `EDGAR_LIVE_TESTS=1 pytest -m live`.
@@ -216,13 +216,107 @@ is handled. The original filing is treated as the source of truth.
 Nothing in Milestone 4 is blocked. Running it needs `SEC_USER_AGENT` (a name and contact email,
 required by SEC) and network access to `www.sec.gov` and `data.sec.gov`.
 
+## 5b. Milestone 2 — market data (built; LIVE VERIFICATION PENDING)
+
+**Status in one line:** the code is complete and its logic is tested, but it has never talked
+to Alpaca, because no API keys were available. Treat every statement below about Alpaca's
+behaviour as unconfirmed until the live tests have been run.
+
+### What exists
+
+| Component | Location |
+|---|---|
+| Provider-neutral types (`Bar`, `Quote`), provider interface, request validation | `backend/services/market_data/base.py` |
+| Alpaca adapter: historical bars with paging, latest quote, exact decimal parsing, error mapping | `backend/services/market_data/alpaca.py` |
+| Integrity checks: rejected bars with reasons, warnings | `backend/services/market_data/integrity.py` |
+| Caching service: fetch once, check, store, serve from storage | `backend/services/market_data/service.py` |
+| Tables `price_bar`, `price_coverage` | `backend/models/market.py` |
+| `GET /api/v1/market/{symbol}/bars`, `GET /api/v1/market/{symbol}/quote` | `backend/api/market.py` |
+| Shared retry and request-spacing helper (also used by the EDGAR client) | `backend/core/http.py` |
+
+Timeframes: 1m, 5m, 15m, 1h, 4h, 1d, 1w. Adjustments: raw, split, dividend, all.
+
+### Behaviour
+
+- **Normalisation.** Every bar is UTC, keyed by the start of its period, with prices kept as exact
+  decimals (parsed straight from the response text, never through binary floats).
+- **Integrity.** A bar is rejected, reported with reasons and never stored if it is impossible:
+  high below low, open or close outside the high-low range, non-positive price, negative volume,
+  non-finite number, wrong symbol or timeframe, timestamp without timezone or outside the
+  requested range, or two different bars for the same moment. Warnings (not rejections): a close
+  moving more than 50% between bars, VWAP outside the range, bars off the timeframe grid,
+  out-of-order or repeated bars, and weekdays without a daily bar.
+- **Caching.** Bars whose period ended at least 20 minutes ago are stored. Newer bars can still
+  change and are fetched fresh each time. Raw history never expires; adjusted history expires
+  after 24 hours because every later split or dividend rewrites it. `price_coverage` records
+  which ranges were fetched, so "nothing traded" is never confused with "never asked". Redis
+  is not used: the database is the cache, and nothing here needs a second store.
+- **Errors.** Rate-limit and server errors are retried with backoff; authentication and request
+  errors are reported once with Alpaca's message; a failed fetch stores nothing. API keys are
+  sent only as headers and never appear in URLs, logs or error messages.
+- **No keys.** The API answers 503 "prices are unavailable". Ranges already stored are still
+  served. Nothing is simulated.
+- **Quotes** carry their age and a `usable` flag (false when stale, crossed, or one-sided).
+- **Feed.** `alpaca_feed` in `config/settings.yaml`, default `iex`. IEX is a single exchange, so
+  its volumes are a small share of total market volume; bars are stored per feed and never mixed.
+
+### Verification performed
+
+| Check | Result |
+|---|---|
+| Unit tests of the adapter, integrity checks, cache and API | 103 tests pass. **All prices in them are made up and all Alpaca responses are synthetic**, shaped after the field names in Alpaca's official SDK |
+| Cache on PostgreSQL 16 / TimescaleDB with a fake provider | Exact 8-decimal round trip, gap-only fetching, adjusted-history refresh |
+| App without keys | 503 "unavailable" for bars and quote; status shows `alpaca: false` |
+| Against live Alpaca | **NOT DONE** |
+
+Source for the Alpaca interface: the official `alpaca-py` SDK 0.45.0, read from PyPI (Alpaca's
+documentation site was not reachable from the development environment). Taken from it: base URL,
+`/v2/stocks/bars` and `/v2/stocks/quotes/latest`, the `APCA-API-KEY-ID` / `APCA-API-SECRET-KEY`
+headers, parameter names, the 10,000-per-page limit, `next_page_token` paging, field names
+(`t o h l c v n vw`; `bp bs ap as`), timeframe spellings and feed names.
+
+### Unverified until the live tests run
+
+1. That real responses have the shape the SDK implies, including what is sent when there is no
+   data (handled: null, absent, or an empty map).
+2. Whether Alpaca's `end` bound is inclusive. The adapter enforces `start <= ts < end` itself.
+3. The timestamp of daily bars (assumed: midnight US Eastern, expressed in UTC). This affects the
+   weekday-gap warning and when a daily bar counts as final.
+4. Status codes and messages for bad keys, unknown symbols and plan restrictions.
+5. Rate limits. The adapter spaces requests to about 170 per minute on the assumption of a
+   200-per-minute free-plan limit; that figure is from memory, not from a source read here.
+6. How far back the free IEX feed goes, and how 4-hour and weekly bars are aligned.
+
+### To verify (needs free Alpaca paper keys)
+
+```bash
+cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.venv/bin/pytest -m live -k alpaca
+```
+
+Six tests in `backend/tests/test_alpaca_live.py` check the January 2024 trading calendar (21
+sessions), internal consistency, paging against a single request, intraday alignment, the 2020
+Apple split under split adjustment, quote parsing, and error behaviour. The environment also
+needs network access to `data.alpaca.markets`.
+
+### Not done in this milestone
+
+- A second (fallback) provider. The interface allows one; no other provider's keys exist either.
+- Streaming prices (websocket). Only request/response is built.
+- An exchange calendar, so holidays show up in the weekday-gap warning.
+- Checking insider-filing prices against market prices (waits for verified price data).
+
+### Blocked
+
+- Live verification: needs `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`.
+
 ## 6. Known shortcuts and deferred items
 
 - Schema is created with `create_all`, which cannot alter existing tables. A development database
   created before a model change must be deleted and re-ingested (filings are cached). Adopt
   Alembic before the first deployment that must keep its data.
 - SQLite stores decimals as floating point (about 15 significant digits); PostgreSQL is exact.
-- Redis is not in the stack yet; it is added with the cache in M2.
+- Redis is not in the stack. The price cache is the database; add Redis only when something
+  needs shared short-lived state (for example streaming quotes or job coordination).
 - No rate limiting on the API yet (single-user, bound to localhost); add before any non-local exposure.
 - Uvicorn's own access log lines are plain text, not JSON (they contain no secrets).
 - Single shared bearer token rather than user accounts; revisit with the dashboard (M9).

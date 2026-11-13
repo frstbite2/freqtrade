@@ -6,3 +6,4 @@ trading_mode: paper        # the only mode; live trading is gated separately (Mi
 database_url: sqlite:///data/platform.sqlite
 log_level: INFO
 log_json: true
+alpaca_feed: iex            # iex (free, one exchange) | sip (paid, whole market) | delayed_sip
