@@ -1,0 +1,232 @@
+[
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0000050863-26-000195",
+  "form": "4",
+  "filingDate": "2026-11-04",
+  "acceptanceDateTime": "2026-11-04T17:19:10.000Z",
+  "primaryDocument": "xslF345X06/form4.xml"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0000050863-26-000194",
+  "form": "4",
+  "filingDate": "2026-11-02",
+  "acceptanceDateTime": "2026-11-02T23:51:19.000Z",
+  "primaryDocument": "xslF345X06/form4.xml"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0001127602-23-006774",
+  "form": "4",
+  "filingDate": "2023-02-23",
+  "acceptanceDateTime": "2023-02-23T21:26:12.000Z",
+  "primaryDocument": "xslF345X03/form4.xml"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0001127602-24-021794",
+  "form": "4",
+  "filingDate": "2024-08-07",
+  "acceptanceDateTime": "2024-08-07T20:23:22.000Z",
+  "primaryDocument": "xslF345X05/form4.xml"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0001127602-25-002794",
+  "form": "5",
+  "filingDate": "2025-02-03",
+  "acceptanceDateTime": "2025-02-03T22:07:11.000Z",
+  "primaryDocument": "xslF345X05/form5.xml"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0000050863-25-000199",
+  "form": "3",
+  "filingDate": "2025-11-26",
+  "acceptanceDateTime": "2025-11-26T21:13:33.000Z",
+  "primaryDocument": "xslF345X02/form3.xml"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0001127602-23-002926",
+  "form": "4",
+  "filingDate": "2023-02-01",
+  "acceptanceDateTime": "2023-02-01T21:59:11.000Z",
+  "primaryDocument": "xslF345X03/form4.xml"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0001127602-25-010360",
+  "form": "4",
+  "filingDate": "2025-03-25",
+  "acceptanceDateTime": "2025-03-25T20:30:52.000Z",
+  "primaryDocument": "xslF345X05/form4.xml"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0000050863-25-000099",
+  "form": "4",
+  "filingDate": "2025-07-14",
+  "acceptanceDateTime": "2025-07-15T01:57:10.000Z",
+  "primaryDocument": "xslF345X05/wk-form4_1752544624.xml"
+ },
+ {
+  "ticker": "AAPL",
+  "cik": 320193,
+  "name": "Apple Inc.",
+  "accession": "0000320193-23-000096",
+  "form": "4",
+  "filingDate": "2023-10-10",
+  "acceptanceDateTime": "2023-10-10T22:30:21.000Z",
+  "primaryDocument": "xslF345X05/wk-form4_1696977012.xml"
+ },
+ {
+  "ticker": "AAPL",
+  "cik": 320193,
+  "name": "Apple Inc.",
+  "accession": "0000320193-24-000049",
+  "form": "4",
+  "filingDate": "2024-04-03",
+  "acceptanceDateTime": "2024-04-03T22:31:43.000Z",
+  "primaryDocument": "xslF345X05/wk-form4_1712183493.xml"
+ },
+ {
+  "ticker": "AAPL",
+  "cik": 320193,
+  "name": "Apple Inc.",
+  "accession": "0001140361-26-023363",
+  "form": "4",
+  "filingDate": "2026-05-29",
+  "acceptanceDateTime": "2026-05-29T22:30:27.000Z",
+  "primaryDocument": "xslF345X06/form4.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000320187-26-000049",
+  "form": "4",
+  "filingDate": "2026-04-14",
+  "acceptanceDateTime": "2026-04-14T20:25:45.000Z",
+  "primaryDocument": "xslF345X06/form4.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0001127602-24-019550",
+  "form": "4",
+  "filingDate": "2024-07-01",
+  "acceptanceDateTime": "2024-07-01T20:18:02.000Z",
+  "primaryDocument": "xslF345X05/form4.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000320187-26-000051",
+  "form": "4",
+  "filingDate": "2026-04-14",
+  "acceptanceDateTime": "2026-04-14T20:27:16.000Z",
+  "primaryDocument": "xslF345X06/form4.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000320187-26-000053",
+  "form": "4/A",
+  "filingDate": "2026-04-22",
+  "acceptanceDateTime": "2026-04-22T20:57:24.000Z",
+  "primaryDocument": "xslF345X06/form4a.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000320187-26-000055",
+  "form": "4",
+  "filingDate": "2026-05-15",
+  "acceptanceDateTime": "2026-05-15T20:30:11.000Z",
+  "primaryDocument": "xslF345X06/form4.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000320187-26-000129",
+  "form": "4/A",
+  "filingDate": "2026-09-03",
+  "acceptanceDateTime": "2026-09-03T23:50:07.000Z",
+  "primaryDocument": "xslF345X06/form4a.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0001127602-24-014652",
+  "form": "4",
+  "filingDate": "2024-05-08",
+  "acceptanceDateTime": "2024-05-08T21:19:37.000Z",
+  "primaryDocument": "xslF345X05/form4.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000320187-26-000013",
+  "form": "4",
+  "filingDate": "2026-02-13",
+  "acceptanceDateTime": "2026-02-13T21:25:32.000Z",
+  "primaryDocument": "xslF345X05/form4.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000320187-26-000045",
+  "form": "4",
+  "filingDate": "2026-04-10",
+  "acceptanceDateTime": "2026-04-10T20:24:43.000Z",
+  "primaryDocument": "xslF345X06/form4.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000320187-26-000043",
+  "form": "4",
+  "filingDate": "2026-04-08",
+  "acceptanceDateTime": "2026-04-08T20:28:00.000Z",
+  "primaryDocument": "xslF345X06/form4.xml"
+ },
+ {
+  "ticker": "TPL",
+  "cik": 1811074,
+  "name": "Texas Pacific Land Corp",
+  "accession": "0001437749-24-028607",
+  "form": "4",
+  "filingDate": "2024-09-06",
+  "acceptanceDateTime": "2024-09-06T16:33:08.000Z",
+  "primaryDocument": "xslF345X05/rdgdoc.xml"
+ }
+]

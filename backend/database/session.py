@@ -1,13 +1,36 @@
 """Database engine and sessions: PostgreSQL/TimescaleDB in deployment, SQLite for dev/tests."""
 
+from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import DateTime, Engine, create_engine, text
+from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.types import TypeDecorator
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class UTCDateTime(TypeDecorator):
+    """Timezone-aware UTC on every backend. SQLite would otherwise hand back naive datetimes,
+    and a naive/aware mix-up is exactly how look-ahead bugs get into point-in-time queries."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            raise ValueError("naive datetime: timestamps must be timezone-aware")
+        return value.astimezone(UTC)
+
+    def process_result_value(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def make_engine(url: str) -> Engine:

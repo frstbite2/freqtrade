@@ -23,3 +23,10 @@ class AuditLog(Base):
 def record_audit(session: Session, actor: str, action: str, **detail) -> None:
     session.add(AuditLog(actor=actor, action=action, detail=detail))
     session.commit()
+
+
+from backend.models.insider import (  # noqa: E402,F401  registers the tables
+    InsiderFiling,
+    InsiderIssuer,
+    InsiderTransaction,
+)

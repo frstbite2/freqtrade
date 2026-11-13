@@ -85,6 +85,8 @@ class AppConfig(_Strict):
     log_json: bool = True
     # SEC requires a descriptive User-Agent with contact info for EDGAR requests.
     sec_user_agent: str | None = None
+    # Raw SEC responses; filing documents are immutable and kept forever.
+    edgar_cache_dir: str = "data/edgar_cache"
 
 
 class Settings(_Strict):

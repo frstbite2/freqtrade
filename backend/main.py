@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from sqlalchemy.orm import sessionmaker
 
 from backend import __version__
+from backend.api.insider import router as insider_router
 from backend.api.routes import public, v1
 from backend.core.config import Settings, get_settings
 from backend.core.logging import setup_logging
@@ -43,4 +44,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.sessions = sessions
     app.include_router(public)
     app.include_router(v1)
+    app.include_router(insider_router)
     return app
