@@ -9,7 +9,6 @@ import httpx
 from backend.services.market_data.cache import TTLCache
 from backend.services.market_data.models import (
     Bar,
-    MarketDataError,
     ProviderConfigurationError,
     ProviderRequestError,
     decimal_value,
@@ -17,7 +16,7 @@ from backend.services.market_data.models import (
 
 
 _BASE_URL = "https://data.alpaca.markets/v2"
-_SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,14}$")
+_SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\\-]{0,14}$")
 _ALLOWED_TIMEFRAMES = {"1Min", "5Min", "15Min", "30Min", "1Hour", "1Day", "1Week", "1Month"}
 
 
@@ -100,7 +99,7 @@ class AlpacaMarketDataClient:
 
         bars: list[Bar] = []
         page_token: str | None = None
-        for page_number in range(self.max_pages):
+        for _ in range(self.max_pages):
             params: dict[str, Any] = {
                 "timeframe": timeframe,
                 "start": start.isoformat().replace("+00:00", "Z"),

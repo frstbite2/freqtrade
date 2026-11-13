@@ -26,10 +26,12 @@ def client(handler, **kwargs):
 
 def test_normalizes_bars_and_uses_iex_feed():
     seen = {}
+
     def handler(request):
         seen.update(dict(request.url.params))
         assert request.headers["APCA-API-KEY-ID"] == "test-key"
         return httpx.Response(200, json={"bars": [bar()], "next_page_token": None})
+
     with client(handler) as api:
         result = api.get_bars("aapl", start=START, end=END)
     assert len(result) == 1
@@ -49,11 +51,13 @@ def test_missing_credentials_fails_closed():
 
 def test_paginates_and_caches_complete_result():
     calls = []
+
     def handler(request):
         calls.append(request.url.params.get("page_token"))
         if len(calls) == 1:
             return httpx.Response(200, json={"bars": [bar("2026-01-01T00:00:00Z")], "next_page_token": "next"})
         return httpx.Response(200, json={"bars": [bar("2026-01-02T00:00:00Z")], "next_page_token": None})
+
     with client(handler) as api:
         first = api.get_bars("AAPL", start=START, end=END)
         second = api.get_bars("AAPL", start=START, end=END)
@@ -86,7 +90,9 @@ def test_rejects_naive_dates_and_bad_symbols():
 
 def test_ttl_cache_evicts_oldest_entry():
     cache = TTLCache[int](ttl_seconds=60, max_entries=2)
-    cache.set("a", 1); cache.set("b", 2); cache.set("c", 3)
+    cache.set("a", 1)
+    cache.set("b", 2)
+    cache.set("c", 3)
     assert cache.get("a") is None
     assert cache.get("b") == 2
     assert cache.get("c") == 3
