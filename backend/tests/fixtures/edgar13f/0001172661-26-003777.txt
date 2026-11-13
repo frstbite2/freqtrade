@@ -1,0 +1,117 @@
+<SEC-DOCUMENT>0001172661-26-003777.txt : 20260814
+<SEC-HEADER>0001172661-26-003777.hdr.sgml : 20260814
+<ACCEPTANCE-DATETIME>20260814162333
+ACCESSION NUMBER:		0001172661-26-003777
+CONFORMED SUBMISSION TYPE:	13F-NT
+PUBLIC DOCUMENT COUNT:		1
+CONFORMED PERIOD OF REPORT:	20260630
+FILED AS OF DATE:		20260814
+DATE AS OF CHANGE:		20260814
+EFFECTIVENESS DATE:		20260814
+
+FILER:
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			Pershing Square Capital Management, L.P.
+		CENTRAL INDEX KEY:			0001336528
+		ORGANIZATION NAME:           	
+		EIN:				383694136
+		STATE OF INCORPORATION:			DE
+		FISCAL YEAR END:			1231
+
+	FILING VALUES:
+		FORM TYPE:		13F-NT
+		SEC ACT:		1934 Act
+		SEC FILE NUMBER:	028-11694
+		FILM NUMBER:		261282255
+
+	BUSINESS ADDRESS:	
+		STREET 1:		787 11TH AVENUE
+		STREET 2:		9TH FLOOR
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10019
+		BUSINESS PHONE:		212-813-3700
+
+	MAIL ADDRESS:	
+		STREET 1:		787 11TH AVENUE
+		STREET 2:		9TH FLOOR
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10019
+</SEC-HEADER>
+<DOCUMENT>
+<TYPE>13F-NT
+<SEQUENCE>1
+<FILENAME>primary_doc.xml
+<TEXT>
+<XML>
+<?xml version="1.0" encoding="UTF-8"?>
+<edgarSubmission xsi:schemaLocation="http://www.sec.gov/edgar/thirteenffiler eis_13F_Filer.xsd" xmlns="http://www.sec.gov/edgar/thirteenffiler" xmlns:ns1="http://www.sec.gov/edgar/common" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <schemaVersion>X0202</schemaVersion>
+  <headerData>
+    <submissionType>13F-NT</submissionType>
+    <filerInfo>
+      <liveTestFlag>LIVE</liveTestFlag>
+      <flags>
+        <confirmingCopyFlag>false</confirmingCopyFlag>
+        <returnCopyFlag>true</returnCopyFlag>
+        <overrideInternetFlag>false</overrideInternetFlag>
+      </flags>
+      <filer>
+        <credentials>
+          <cik>0001336528</cik>
+          <ccc>XXXXXXXX</ccc>
+        </credentials>
+      </filer>
+      <periodOfReport>06-30-2026</periodOfReport>
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPage>
+      <reportCalendarOrQuarter>06-30-2026</reportCalendarOrQuarter>
+      <isAmendment>false</isAmendment>
+      <filingManager>
+        <name>Pershing Square Capital Management, L.P.</name>
+        <address>
+          <ns1:street1>787 11th Avenue</ns1:street1>
+          <ns1:street2>9th Floor</ns1:street2>
+          <ns1:city>New York</ns1:city>
+          <ns1:stateOrCountry>NY</ns1:stateOrCountry>
+          <ns1:zipCode>10019</ns1:zipCode>
+        </address>
+      </filingManager>
+      <reportType>13F NOTICE</reportType>
+      <form13FFileNumber>028-11694</form13FFileNumber>
+      <crdNumber>000132982</crdNumber>
+      <secFileNumber>801-63688</secFileNumber>
+      <otherManagersInfo>
+        <otherManager>
+          <cik>0002026053</cik>
+          <form13FFileNumber>028-25746</form13FFileNumber>
+          <name>PERSHING SQUARE INC.</name>
+        </otherManager>
+      </otherManagersInfo>
+      <provideInfoForInstruction5>Y</provideInfoForInstruction5>
+      <additionalInformation>Holdings of this reporting manager are now included in the report of its public parent company.</additionalInformation>
+    </coverPage>
+    <signatureBlock>
+      <name>William A Ackman</name>
+      <title>Authorized Signatory</title>
+      <phone>212-813-3700</phone>
+      <signature>/s/    William A Ackman</signature>
+      <city>New York</city>
+      <stateOrCountry>NY</stateOrCountry>
+      <signatureDate>08-14-2026</signatureDate>
+    </signatureBlock>
+    <summaryPage>
+      <otherIncludedManagersCount/>
+      <tableEntryTotal/>
+      <tableValueTotal/>
+    </summaryPage>
+  </formData>
+</edgarSubmission>
+</XML>
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>

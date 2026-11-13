@@ -148,6 +148,10 @@ class EdgarClient:
 
     def ownership_filings(self, cik: int, since: date) -> tuple[str, list[FilingRef]]:
         """Entity name and all Form 3/4/5 filings (and amendments) filed on or after `since`."""
+        return self.filings(cik, since, OWNERSHIP_FORMS)
+
+    def filings(self, cik: int, since: date, forms: frozenset[str]) -> tuple[str, list[FilingRef]]:
+        """Entity name and its filings of the given form types filed on or after `since`."""
         base = "https://data.sec.gov/submissions/"
         main = self._json(f"{base}CIK{cik:010d}.json", max_age=900)
         try:
@@ -158,7 +162,7 @@ class EdgarClient:
                     if not _DOCUMENT.match(name):
                         raise EdgarError(f"unexpected submissions page name: {name!r}")
                     pages.append(self._json(base + name, max_age=86400))
-            refs = [ref for page in pages for ref in _refs_from_page(page, since)]
+            refs = [ref for page in pages for ref in _refs_from_page(page, since, forms)]
             return str(main["name"]), refs
         except (KeyError, TypeError, ValueError, IndexError) as exc:
             raise EdgarError(f"unexpected submissions format for CIK {cik}: {exc!r}") from exc
@@ -175,15 +179,26 @@ class EdgarClient:
             must_contain=b"<ownershipDocument",
         )
 
+    def submission_text(self, cik: int, accession: str) -> bytes:
+        """The complete submission (every document of the filing) as EDGAR stores it."""
+        if not _ACCESSION.match(accession):
+            raise EdgarError(f"unsafe accession number: {accession!r}")
+        return self.get(
+            f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession.replace('-', '')}"
+            f"/{accession}.txt",
+            max_age=None,
+            must_contain=b"<SEC-DOCUMENT>",
+        )
 
-def _refs_from_page(page: dict, since: date) -> list[FilingRef]:
+
+def _refs_from_page(page: dict, since: date, forms: frozenset[str]) -> list[FilingRef]:
     columns = ("accessionNumber", "form", "filingDate", "acceptanceDateTime", "primaryDocument")
     if len({len(page[c]) for c in columns}) != 1:
         # A truncated column would silently drop filings.
         raise ValueError("index columns have different lengths")
     refs = []
     for i, form in enumerate(page["form"]):
-        if form not in OWNERSHIP_FORMS:
+        if form not in forms:
             continue
         filed = date.fromisoformat(page["filingDate"][i])
         if filed < since:

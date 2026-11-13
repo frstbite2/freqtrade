@@ -91,6 +91,8 @@ class AppConfig(_Strict):
     # volumes are a small share of the market. "sip" (all exchanges) needs a paid plan.
     alpaca_feed: Literal["iex", "sip", "delayed_sip"] = "iex"
     api_rate_limit_per_minute: int = Field(120, ge=1, le=10_000)  # per client address
+    # Investment managers (SEC CIK numbers) whose quarterly 13F filings are tracked.
+    tracked_managers: tuple[int, ...] = ()
 
 
 class Settings(_Strict):

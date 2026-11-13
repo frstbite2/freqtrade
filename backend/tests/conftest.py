@@ -19,6 +19,8 @@ from backend.services.edgar import EdgarClient
 
 FIXTURES = Path(__file__).parent / "fixtures" / "edgar"
 MANIFEST = json.loads((FIXTURES / "manifest.json").read_text())
+FIXTURES_13F = Path(__file__).parent / "fixtures" / "edgar13f"
+MANIFEST_13F = json.loads((FIXTURES_13F / "manifest.json").read_text())
 TEST_USER_AGENT = "platform-tests tests@example.com"
 SINCE = date(2023, 1, 1)
 
@@ -44,7 +46,7 @@ def edgar_handler(request: httpx.Request) -> httpx.Response:
         )
     if url.startswith("https://data.sec.gov/submissions/CIK"):
         cik = int(url.removeprefix("https://data.sec.gov/submissions/CIK").removesuffix(".json"))
-        rows = [m for m in MANIFEST if m["cik"] == cik]
+        rows = [m for m in MANIFEST + MANIFEST_13F if m["cik"] == cik]
         if not rows:
             return httpx.Response(404)
         columns = ("accessionNumber", "form", "filingDate", "acceptanceDateTime", "primaryDocument")
@@ -54,6 +56,11 @@ def edgar_handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200, json={"name": rows[0]["name"], "filings": {"recent": recent, "files": []}}
         )
+    for m in MANIFEST_13F:
+        if url.endswith(f"/{m['accession'].replace('-', '')}/{m['accession']}.txt"):
+            return httpx.Response(
+                200, content=(FIXTURES_13F / f"{m['accession']}.txt").read_bytes()
+            )
     for m in MANIFEST:
         document = m["primaryDocument"].rsplit("/", 1)[-1]
         if url.endswith(f"/{m['accession'].replace('-', '')}/{document}"):

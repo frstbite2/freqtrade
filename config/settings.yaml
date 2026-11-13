@@ -8,3 +8,22 @@ log_level: INFO
 log_json: true
 alpaca_feed: iex            # iex (free, one exchange) | sip (paid, whole market) | delayed_sip
 api_rate_limit_per_minute: 120   # per client address; applies before authentication
+
+# Investment managers whose quarterly 13F holdings are tracked, by SEC CIK number.
+# Names confirmed on EDGAR on 2026-11-13. Add or remove freely; very large quantitative
+# managers (Citadel, Millennium, Renaissance) file tens of thousands of rows per quarter.
+tracked_managers:
+  - 1067983   # Berkshire Hathaway
+  - 1350694   # Bridgewater Associates
+  - 1061768   # Baupost Group
+  - 1656456   # Appaloosa
+  - 1040273   # Third Point
+  - 1167483   # Tiger Global Management
+  - 1135730   # Coatue Management
+  - 1536411   # Duquesne Family Office
+  - 1029160   # Soros Fund Management
+  - 1061165   # Lone Pine Capital
+  - 1103804   # Viking Global Investors
+  - 1791786   # Elliott Investment Management
+  - 921669    # Carl C. Icahn
+  - 1336528   # Pershing Square Capital Management

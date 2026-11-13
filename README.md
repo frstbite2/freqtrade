@@ -3,7 +3,7 @@
 This fork adds a standalone, paper-trading-only AI trading research platform in `backend/`,
 next to the upstream freqtrade crypto bot (documented below, unchanged). Status, architecture,
 roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: foundation
-and SEC insider-filing intelligence, both verified. A market-data adapter for Alpaca and the
+and SEC insider-filing and 13F institutional-holdings intelligence, verified on real filings. A market-data adapter for Alpaca and the
 technical-analysis engine are built, but neither has run on real prices yet (needs Alpaca API
 keys).** There is no trading yet.
 
@@ -30,6 +30,17 @@ curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/insider/NKE/transacti
 ```
 
 Scores are research rankings of disclosed insider buying, not predictions.
+
+Institutional holdings (SEC Form 13F) work the same way, for the managers listed under
+`tracked_managers` in `config/settings.yaml`. 13F has no tickers, so look up the CUSIP first:
+
+```bash
+.venv/bin/python -m backend.services.institutional_analysis.ingest --since 2024-01-01
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/institutional/search?name=nvidia"
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/institutional/securities/67066G104"
+```
+
+13F data is a quarter-end snapshot disclosed up to 45 days later, not current holdings.
 
 Prices need Alpaca keys (free paper keys work) in `.env`; without them the API answers
 "unavailable" rather than inventing data:

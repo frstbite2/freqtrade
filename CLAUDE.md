@@ -24,6 +24,10 @@ docker compose -f docker-compose.platform.yml up -d --build   # needs .env (see 
 .venv/bin/python -m backend.services.insider_intelligence.verify 2024q3_form345.zip --sample 300
 cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live -k edgar
 
+# Institutional holdings (13F); same SEC requirements. No CIK means the tracked_managers in settings.yaml
+.venv/bin/python -m backend.services.institutional_analysis.ingest --since 2024-01-01
+.venv/bin/python -m backend.services.institutional_analysis.verify 01jun2025-31aug2025_form13f.zip
+
 # Market data: live verification is PENDING until Alpaca keys exist
 cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.venv/bin/pytest -m live -k alpaca
 ```
@@ -53,5 +57,8 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
 - Technical analysis is unverified on real data until M2 is verified; keep that stated in
   `engine.py`, the API disclaimer and PROJECT_STATUS.md. Detectors must stay causal: the
   truncation test in `test_technical_analysis.py` must keep passing.
+- 13F results always state the quarter end and disclosure time, never "currently holds". A 13F-NT or
+  a missing quarter is "not comparable", never a sale. Real 13F fixtures live in
+  `backend/tests/fixtures/edgar13f/`, stored unmodified.
 - Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
   withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

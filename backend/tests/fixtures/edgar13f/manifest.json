@@ -1,0 +1,128 @@
+[
+ {
+  "cik": 1336528,
+  "name": "Pershing Square Capital Management, L.P.",
+  "accession": "0001172661-24-005218",
+  "form": "13F-HR",
+  "filingDate": "2024-11-14",
+  "acceptanceDateTime": "2024-11-14T21:17:12.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1336528,
+  "name": "Pershing Square Capital Management, L.P.",
+  "accession": "0001172661-25-001119",
+  "form": "13F-HR",
+  "filingDate": "2025-02-14",
+  "acceptanceDateTime": "2025-02-14T21:02:10.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1336528,
+  "name": "Pershing Square Capital Management, L.P.",
+  "accession": "0001172661-25-001497",
+  "form": "13F-HR/A",
+  "filingDate": "2025-04-16",
+  "acceptanceDateTime": "2025-04-16T11:43:09.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1336528,
+  "name": "Pershing Square Capital Management, L.P.",
+  "accession": "0001172661-25-002315",
+  "form": "13F-HR",
+  "filingDate": "2025-05-15",
+  "acceptanceDateTime": "2025-05-15T20:03:24.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1336528,
+  "name": "Pershing Square Capital Management, L.P.",
+  "accession": "0001172661-26-002336",
+  "form": "13F-HR",
+  "filingDate": "2026-05-15",
+  "acceptanceDateTime": "2026-05-15T20:19:58.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1336528,
+  "name": "Pershing Square Capital Management, L.P.",
+  "accession": "0001172661-26-003777",
+  "form": "13F-NT",
+  "filingDate": "2026-08-14",
+  "acceptanceDateTime": "2026-08-14T20:23:33.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1336528,
+  "name": "Pershing Square Capital Management, L.P.",
+  "accession": "0001172661-22-002568",
+  "form": "13F-HR",
+  "filingDate": "2022-11-14",
+  "acceptanceDateTime": "2022-11-14T21:21:40.000Z",
+  "primaryDocument": "xslForm13F_X01/primary_doc.xml"
+ },
+ {
+  "cik": 1791786,
+  "name": "Elliott Investment Management L.P.",
+  "accession": "0001013594-25-000294",
+  "form": "13F-HR",
+  "filingDate": "2025-02-14",
+  "acceptanceDateTime": "2025-02-14T21:17:25.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1791786,
+  "name": "Elliott Investment Management L.P.",
+  "accession": "0001013594-25-000512",
+  "form": "13F-HR/A",
+  "filingDate": "2025-04-28",
+  "acceptanceDateTime": "2025-04-25T21:38:48.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1167483,
+  "name": "TIGER GLOBAL MANAGEMENT LLC",
+  "accession": "0000919574-24-003172",
+  "form": "13F-HR",
+  "filingDate": "2024-05-15",
+  "acceptanceDateTime": "2024-05-15T18:00:23.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1167483,
+  "name": "TIGER GLOBAL MANAGEMENT LLC",
+  "accession": "0000919574-24-004713",
+  "form": "13F-HR",
+  "filingDate": "2024-08-14",
+  "acceptanceDateTime": "2024-08-14T18:06:45.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1656456,
+  "name": "Appaloosa LP",
+  "accession": "0001656456-24-000002",
+  "form": "13F-HR",
+  "filingDate": "2024-05-15",
+  "acceptanceDateTime": "2024-05-15T20:00:52.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1656456,
+  "name": "Appaloosa LP",
+  "accession": "0001656456-24-000003",
+  "form": "13F-HR",
+  "filingDate": "2024-08-14",
+  "acceptanceDateTime": "2024-08-14T20:00:07.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ },
+ {
+  "cik": 1536411,
+  "name": "Duquesne Family Office LLC",
+  "accession": "0001536411-26-000006",
+  "form": "13F-HR",
+  "filingDate": "2026-08-14",
+  "acceptanceDateTime": "2026-08-14T19:55:57.000Z",
+  "primaryDocument": "xslForm13F_X02/primary_doc.xml"
+ }
+]

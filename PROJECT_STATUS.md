@@ -1,6 +1,6 @@
 # AI Trading Platform — Project Status
 
-Last updated: 2026-11-13 · Complete and verified: **1, 4** · Built, live verification pending: **2** · Built, unverified on real data: **3**
+Last updated: 2026-11-13 · Complete and verified: **1, 4** · Built, live verification pending: **2** · Built, unverified on real data: **3** · Half done and verified: **5** (13F holdings; options flow not started)
 
 Milestone 4 (insider filings) was done before Milestone 2 (market data) at the owner's request,
 because SEC EDGAR needs no API key and could be verified against real data immediately.
@@ -90,7 +90,7 @@ the one thing blocking verification of M2, and are needed again for M7.
 - [~] **M2 Market data** — built and unit-tested; **verification against live Alpaca is pending API keys**
 - [~] **M3 Technical analysis** — built and tested on constructed price series; **not yet run on real market data** (waits on M2)
 - [x] **M4 Insider intelligence** — EDGAR client, Forms 3/4/5 parsing, classification, scoring, history
-- [ ] **M5 Institutional + options** — 13F diffs, 13D/13G, unusual options activity, scoring
+- [~] **M5 Institutional + options** — 13F holdings, changes and scoring done and verified on real filings; 13D/13G and options flow not started
 - [ ] **M6 AI engine** — features, models, regime detection, opportunity score, explanations
 - [ ] **M7 Risk + execution** — position sizing, hard limits, kill switch, paper broker adapters
 - [ ] **M8 Backtesting** — fees, slippage, walk-forward, Monte Carlo, benchmarks
@@ -383,6 +383,85 @@ invented here.
 
 - Validation on real markets: needs Milestone 2 verified (Alpaca keys).
 - Historical performance of comparable setups: needs Milestone 8.
+
+## 5d. Milestone 5, part 1 — institutional holdings from Form 13F (complete, with stated limits)
+
+Options flow (the other half of Milestone 5) is not started: it needs a paid data provider.
+
+### What exists
+
+| Component | Location |
+|---|---|
+| Parser for 13F-HR, 13F-HR/A and 13F-NT submissions, with cover-page reconciliation | `backend/services/institutional_analysis/parser.py` |
+| Ingestion of tracked managers, idempotent and audited | `backend/services/institutional_analysis/ingest.py` |
+| Point-in-time reports, amendments, quarter-over-quarter changes, split handling | `backend/services/institutional_analysis/holdings.py` |
+| Institutional activity score 0-100 per security | `backend/services/institutional_analysis/scoring.py` |
+| Verification against SEC's Form 13F data sets | `backend/services/institutional_analysis/verify.py` |
+| Tables `institutional_manager`, `institutional_filing`, `institutional_holding` | `backend/models/institutional.py` |
+| `GET /api/v1/institutional/securities/{cusip}`, `/search?name=`, `/managers`, `/managers/{cik}/changes` | `backend/api/institutional.py` |
+| 14 tracked managers (names confirmed on EDGAR), editable | `config/settings.yaml` → `tracked_managers` |
+
+### Rules that came from the real filings
+
+- **A filing is a delayed snapshot.** Every result names its quarter end and the moment it became
+  public, and nothing is used before that moment. Results never claim a manager holds something now.
+- **Confidential positions arrive late.** Pershing Square's Hertz stake was omitted from its
+  December 2024 report (filed 14 February 2025) and disclosed by a "new holdings" amendment on
+  16 April 2025. It is added only from that moment, and is then an increase the next quarter,
+  not a new position.
+- **A restatement replaces** the report it amends; adding both would double every share.
+- **A 13F-NT is not an exit.** It says another manager reports the holdings. That quarter is
+  "reported elsewhere" and the manager is left out of comparisons, never shown as selling.
+- **One security, many rows.** Managers split a position across rows; shares are summed per CUSIP.
+- **Options are not ownership.** Put and call rows are counted separately and excluded from shares.
+- **Value units cannot be trusted from the date.** Values were thousands of dollars before 3 January
+  2023 and dollars after, but Baupost, Duquesne and others still file thousands. A filing whose
+  median value per share is under $1 is read as thousands, and the filing is flagged.
+- **Stock splits are not buying.** 13F says nothing about splits. Nvidia's 10-for-1 split in June
+  2024 turns Appaloosa's 84% sale into an apparent 56% purchase. A split is recognised when some
+  tracked holder's share count is multiplied by exactly a split ratio and the implied price moved
+  the other way; previous shares are then adjusted for everyone. When the implied price moved by
+  more than about half or double and no holder shows an exact ratio, the security is marked
+  "unclear" for that quarter and not interpreted.
+- The cover page states the table's row count and total value; every filing is checked against it.
+
+### Verification performed (2026-11-13)
+
+| Check | Result |
+|---|---|
+| Parser vs SEC's Form 13F data set for filings of June to August 2025, random sample of 120 holdings reports | 120 of 120 identical: cover fields and all 31,381 holdings rows |
+| Real ingestion of the 14 tracked managers, filings since 2024-01-01 | 165 filings, 20,129 rows, 0 failures; every table reconciles with its cover page |
+| Value unit | Confirmed on Berkshire: about $0.14 "per share" for Apple in the November 2022 filing (thousands) and $129.93 in February 2023 (dollars). 24 of the 165 filings were read as thousands by the per-share rule |
+| Splits found across nine quarters of real data | Nvidia 10-for-1 and Palo Alto 2-for-1 recognised; Broadcom, Netflix, Chipotle, Interactive Brokers and Deckers (real splits no tracked holder carried exactly) marked unclear |
+| Automated tests | 33 tests on 14 real submissions stored unmodified |
+
+Reproduce: `python -m backend.services.institutional_analysis.verify <data set>.zip`.
+
+### Partially complete
+
+- **Score.** Four components (breadth, new positions, net buying, consistency over two quarters),
+  normalised over those available. Weights are unvalidated priors. It ranks accumulation only;
+  net selling scores 0 and is reported in the counts.
+- **Split handling** is inferred from the holders. A split nobody carried exactly, or simply a
+  very large real price move, makes a security "unclear" for that quarter. Verified market data
+  (Milestone 2) would replace the inference with actual split dates.
+- **The thousands rule** misreads a filing only if most of a manager's holdings trade under $1.
+
+### Limits
+
+- **Coverage is the tracked list.** "3 of 13 managers added" describes those managers, not the
+  market. Adding managers is a settings change; the largest quantitative firms file tens of
+  thousands of rows a quarter.
+- **13F has no tickers.** Securities are identified by CUSIP; `/search` finds a CUSIP by the issuer
+  name managers report. Mapping tickers to CUSIPs needs a licensed source and is not done.
+- 13F covers long positions in listed US securities only: no shorts, no cash, no foreign listings.
+- Filings before 2013 are text-only and are not parsed.
+
+### Not done
+
+- Forms 13D and 13G (large individual stakes).
+- Options flow: needs a paid provider (Polygon or Tradier).
+- Scheduled ingestion; like insider data, 13F ingestion is a manual command.
 
 ## 6. Known shortcuts and deferred items
 

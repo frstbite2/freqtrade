@@ -30,4 +30,9 @@ from backend.models.insider import (  # noqa: E402,F401  registers the tables
     InsiderIssuer,
     InsiderTransaction,
 )
+from backend.models.institutional import (  # noqa: E402,F401
+    InstitutionalFiling,
+    InstitutionalHolding,
+    InstitutionalManager,
+)
 from backend.models.market import PriceBar, PriceCoverage  # noqa: E402,F401

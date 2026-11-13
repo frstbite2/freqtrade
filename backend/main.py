@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend import __version__
 from backend.api.insider import router as insider_router
+from backend.api.institutional import router as institutional_router
 from backend.api.market import router as market_router
 from backend.api.routes import public, rate_limit, v1
 from backend.api.technical import router as technical_router
@@ -63,6 +64,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(public)
     app.include_router(v1)
     app.include_router(insider_router)
+    app.include_router(institutional_router)
     app.include_router(market_router)
     app.include_router(technical_router)
     return app
