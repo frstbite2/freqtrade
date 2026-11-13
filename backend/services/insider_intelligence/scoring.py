@@ -18,7 +18,11 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from backend.models.insider import InsiderFiling, InsiderIssuer, InsiderTransaction
-from backend.services.insider_intelligence.history import effective_transactions, filings_as_of
+from backend.services.insider_intelligence.history import (
+    effective_transactions,
+    filings_as_of,
+    owner_groups,
+)
 
 
 LOOKBACK_DAYS = 90
@@ -63,9 +67,9 @@ def _seniority(t: InsiderTransaction) -> tuple[float, str]:
     return 3.0, f"{f.owner_name} (other reporting person)"
 
 
-def _cluster(buys: list[InsiderTransaction]) -> int:
+def _cluster(buys: list[InsiderTransaction], who: dict[int, int]) -> int:
     """Most distinct insiders buying within any CLUSTER_DAYS span."""
-    dated = sorted((t.transaction_date, t.filing.owner_cik) for t in buys)
+    dated = sorted((t.transaction_date, who[t.filing.owner_cik]) for t in buys)
     best = 0
     for start, _ in dated:
         end = start + timedelta(days=CLUSTER_DAYS)
@@ -93,11 +97,13 @@ def _holdings_reported(filing: InsiderFiling) -> Decimal | None:
     return holdings + sum(traded_lots.values()) if found else None
 
 
-def _ownership_change(buys: list[InsiderTransaction]) -> tuple[float, int] | None:
+def _ownership_change(
+    buys: list[InsiderTransaction], who: dict[int, int]
+) -> tuple[float, int] | None:
     """Value-weighted increase in each buyer's total reported holdings, capped at 100%."""
     by_owner: dict[int, list[InsiderTransaction]] = defaultdict(list)
     for t in buys:
-        by_owner[t.filing.owner_cik].append(t)
+        by_owner[who[t.filing.owner_cik]].append(t)
     weighted = total = Decimal(0)
     measured = 0
     for rows in by_owner.values():
@@ -122,14 +128,13 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
         return None
     day = as_of.date()
     start = day - timedelta(days=LOOKBACK_DAYS)
-    dated = [
-        t
-        for t in effective_transactions(filings_as_of(session, cik, as_of))
-        if t.transaction_date is not None
-    ]
+    filings = filings_as_of(session, cik, as_of)
+    who = owner_groups(filings)  # filer CIK -> the insider it counts as
+    dated = [t for t in effective_transactions(filings) if t.transaction_date is not None]
     window = [t for t in dated if start <= t.transaction_date <= day]
     buys = [t for t in window if t.signal == "discretionary_buy"]
     sells = [t for t in window if t.signal == "discretionary_sell"]
+    buyers = {who[t.filing.owner_cik] for t in buys}
     buy_value = sum((t.value for t in buys), Decimal(0))
     sell_value = sum((t.value for t in sells), Decimal(0))
 
@@ -139,9 +144,9 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
         components.append(
             Component("purchase_value", 25 * size, 25, True, f"${buy_value:,.0f} bought")
         )
-        points, who = max(_seniority(t) for t in buys)
-        components.append(Component("seniority", points, 20, True, f"most senior buyer: {who}"))
-        n = _cluster(buys)
+        points, senior = max(_seniority(t) for t in buys)
+        components.append(Component("seniority", points, 20, True, f"most senior buyer: {senior}"))
+        n = _cluster(buys, who)
         components.append(
             Component(
                 "cluster",
@@ -151,7 +156,7 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
                 f"{n} distinct insider(s) buying within {CLUSTER_DAYS} days",
             )
         )
-        change = _ownership_change(buys)
+        change = _ownership_change(buys, who)
         if change is None:
             components.append(
                 Component("ownership_change", 0, 15, False, "post-transaction holdings not stated")
@@ -183,10 +188,10 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
             prior_days: dict[int, set] = defaultdict(set)
             for t in dated:
                 if t.signal == "discretionary_buy" and history_start <= t.transaction_date < start:
-                    prior_days[t.filing.owner_cik].add(t.transaction_date)
+                    prior_days[who[t.filing.owner_cik]].add(t.transaction_date)
             weight = {0: Decimal(1), 1: Decimal("0.5"), 2: Decimal("0.5")}
             rarity = sum(
-                t.value * weight.get(len(prior_days[t.filing.owner_cik]), Decimal("0.2"))
+                t.value * weight.get(len(prior_days[who[t.filing.owner_cik]]), Decimal("0.2"))
                 for t in buys
             )
             rarity = float(rarity / buy_value) if buy_value else 0.0
@@ -197,7 +202,7 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
                     15,
                     True,
                     f"buyers' prior purchase days since {history_start}: "
-                    f"{sorted(len(prior_days[o]) for o in {t.filing.owner_cik for t in buys})}",
+                    f"{sorted(len(prior_days[insider]) for insider in buyers)}",
                 )
             )
     for name, need in (
@@ -218,8 +223,8 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
         )
     else:
         explanation = (
-            f"{len({t.filing.owner_cik for t in buys})} insider(s) made {len(buys)} discretionary "
-            f"open-market purchase(s) worth ${buy_value:,.0f} in the {LOOKBACK_DAYS} days to {day}."
+            f"{len(buyers)} insider(s) made {len(buys)} discretionary open-market purchase(s) "
+            f"worth ${buy_value:,.0f} in the {LOOKBACK_DAYS} days to {day}."
         )
         if sells:
             explanation += (
@@ -235,8 +240,8 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
         "explanation": explanation,
         "components": [asdict(c) | {"points": round(c.points, 1)} for c in components],
         "coverage": round(available_max / sum(c.max_points for c in components), 2),
-        "discretionary_buys": _summary(buys, buy_value),
-        "discretionary_sells": _summary(sells, sell_value),
+        "discretionary_buys": _summary(buys, buy_value, who),
+        "discretionary_sells": _summary(sells, sell_value, who),
         "not_counted": dict(Counter(t.category for t in window if t.signal is None)),
         "evidence": [transaction_dict(t) for t in buys + sells],
         "history_since": issuer.history_since.isoformat(),
@@ -245,10 +250,10 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
     }
 
 
-def _summary(rows: list[InsiderTransaction], value: Decimal) -> dict:
+def _summary(rows: list[InsiderTransaction], value: Decimal, who: dict[int, int]) -> dict:
     return {
         "transactions": len(rows),
-        "insiders": len({t.filing.owner_cik for t in rows}),
+        "insiders": len({who[t.filing.owner_cik] for t in rows}),
         "value": f"{value:.2f}",
     }
 

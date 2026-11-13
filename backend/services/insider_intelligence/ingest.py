@@ -21,7 +21,7 @@ from backend.services.edgar import (
     FilingRef,
     filing_index_url,
 )
-from backend.services.insider_intelligence.classify import classify_filing
+from backend.services.insider_intelligence import classify
 from backend.services.insider_intelligence.parser import (
     FilingParseError,
     ParsedFiling,
@@ -43,6 +43,7 @@ class IngestReport:
     listed: int = 0  # ownership filings in the EDGAR index for the period
     stored: int = 0
     already_stored: int = 0
+    reclassified: int = 0  # of `stored`: replaced because the classification rules changed
     other_issuer: int = 0  # the company reporting as an owner of a different issuer
     no_xml: list[str] = field(default_factory=list)  # paper-era filings without structured data
     failed: dict[str, str] = field(default_factory=dict)  # accession -> reason; retried next run
@@ -60,7 +61,12 @@ def ingest_issuer(session: Session, client: EdgarClient, ticker: str, since: dat
     name, refs = client.ownership_filings(cik, since)
     report = IngestReport(ticker=ticker, cik=cik, name=name, since=since, listed=len(refs))
     stored = set(
-        session.scalars(select(InsiderFiling.accession).where(InsiderFiling.issuer_cik == cik))
+        session.scalars(
+            select(InsiderFiling.accession).where(
+                InsiderFiling.issuer_cik == cik,
+                InsiderFiling.classifier_version == classify.CLASSIFIER_VERSION,
+            )
+        )
     )
     for ref in refs:
         if ref.accession in stored:
@@ -77,7 +83,12 @@ def ingest_issuer(session: Session, client: EdgarClient, ticker: str, since: dat
                     raise FilingParseError(
                         f"index says form {ref.form}, document says {parsed.document_type}"
                     )
-                classify_filing(parsed, ref.filed_date)
+                classify.classify_filing(parsed, ref.filed_date)
+                outdated = session.get(InsiderFiling, ref.accession)
+                if outdated is not None:  # classified under older rules: replace it
+                    session.delete(outdated)
+                    session.flush()
+                    report.reclassified += 1
                 session.add(_to_model(parsed, ref))
                 session.commit()  # one filing is stored completely or not at all
                 stored.add(ref.accession)  # an index that lists a filing twice stores it once
@@ -121,6 +132,7 @@ def _to_model(parsed: ParsedFiling, ref: FilingRef) -> InsiderFiling:
         owners=[asdict(o) for o in parsed.owners],
         remarks=parsed.remarks,
         url=filing_index_url(parsed.issuer_cik, ref.accession),
+        classifier_version=classify.CLASSIFIER_VERSION,
         transactions=[
             InsiderTransaction(
                 row_index=r.row_index,
@@ -173,7 +185,8 @@ def main() -> None:
                 r = ingest_issuer(session, client, ticker, opts.since)
                 print(
                     f"{r.ticker} (CIK {r.cik}, {r.name}): {r.listed} listed since {r.since}, "
-                    f"{r.stored} stored, {r.already_stored} already stored, "
+                    f"{r.stored} stored ({r.reclassified} re-classified), "
+                    f"{r.already_stored} already stored, "
                     f"{r.other_issuer} other-issuer, {len(r.no_xml)} without XML, "
                     f"{len(r.failed)} failed"
                 )

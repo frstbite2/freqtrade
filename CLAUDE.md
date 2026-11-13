@@ -18,6 +18,11 @@ cd backend && ../.venv/bin/pytest          # platform tests (own pytest.ini)
 .venv/bin/ruff check backend && .venv/bin/ruff format backend
 API_AUTH_TOKEN=dev .venv/bin/uvicorn --factory backend.main:create_app --reload
 docker compose -f docker-compose.platform.yml up -d --build   # needs .env (see .env.example)
+
+# Insider filings (needs SEC_USER_AGENT="Name email@example.com" and access to sec.gov)
+.venv/bin/python -m backend.services.insider_intelligence.ingest NKE AAPL --since 2023-01-01
+.venv/bin/python -m backend.services.insider_intelligence.verify 2024q3_form345.zip --sample 300
+cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live
 ```
 
 ## Rules
@@ -36,3 +41,8 @@ docker compose -f docker-compose.platform.yml up -d --build   # needs .env (see 
 - Scores are research rankings, not probabilities. Disclosed insider/13F data is delayed public
   disclosure — never describe it as illegal activity or as current holdings.
 - Create `backend/services/<engine>/` only when implementing that engine; no placeholder modules.
+- Test parsing and classification on real filings. To add one, save the document byte-for-byte in
+  `backend/tests/fixtures/edgar/` with its index metadata in `manifest.json`; never edit a fixture.
+- Any change to `classify.py` rules must bump `CLASSIFIER_VERSION`, so stored rows are re-classified.
+- Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
+  withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

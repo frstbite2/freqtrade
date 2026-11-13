@@ -306,6 +306,18 @@ def test_shares_bought_from_the_company_are_not_an_open_market_purchase():
     assert trades(f) == [("A", Decimal(1043406), Decimal("23.96"), "acquisition_from_issuer", None)]
 
 
+def test_trades_made_without_the_insiders_knowledge_are_not_signals():
+    """Carvana director, 0001088011-26-000004: 'effected by an investment manager with
+    discretionary authority ... without the knowledge or direction of the Reporting Person'."""
+    f = load("0001088011-26-000004")
+    assert "without the knowledge or direction of the Reporting Person" in f.rows[0].footnotes
+    assert trades(f) == [
+        ("P", Decimal(5), Decimal("441.36"), "third_party_managed", None),
+        ("S", Decimal(3), Decimal("411.61"), "third_party_managed", None),
+        ("S", Decimal(2), Decimal("310.76"), "third_party_managed", None),
+    ]
+
+
 def test_gifts_are_not_signals():
     f = load("0001127602-23-002926")
     gifts = [r for r in f.rows if r.code == "G"]

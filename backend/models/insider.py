@@ -58,6 +58,7 @@ class InsiderFiling(Base):
     owners: Mapped[list] = mapped_column(JSON)
     remarks: Mapped[str] = mapped_column(Text)
     url: Mapped[str] = mapped_column(Text)
+    classifier_version: Mapped[int]  # rules that produced the rows' category and signal
 
     transactions: Mapped[list["InsiderTransaction"]] = relationship(
         back_populates="filing",

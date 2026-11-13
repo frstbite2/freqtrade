@@ -35,6 +35,26 @@ def _lot(t: InsiderTransaction) -> tuple:
     )
 
 
+def owner_groups(filings: list[InsiderFiling]) -> dict[int, int]:
+    """Map each filer CIK to the insider it counts as: people who ever file jointly are one.
+
+    A fund and its chairman file together, sometimes with one named first and sometimes the
+    other. Counting them separately would report one decision as a cluster of two insiders.
+    """
+    parent: dict[int, int] = {}
+
+    def find(cik: int) -> int:
+        while parent.setdefault(cik, cik) != cik:
+            parent[cik] = parent[parent[cik]]
+            cik = parent[cik]
+        return cik
+
+    for f in filings:
+        for owner in f.owners or []:
+            parent[find(owner["cik"])] = find(f.owner_cik)
+    return {f.owner_cik: find(f.owner_cik) for f in filings}
+
+
 def _amends(amendment: InsiderFiling, original: InsiderFiling) -> bool:
     if original.accepted_at >= amendment.accepted_at:
         return False
@@ -53,15 +73,16 @@ def effective_transactions(filings: list[InsiderFiling]) -> list[InsiderTransact
        keeping the first public disclosure.
     """
     filings = sorted(filings, key=lambda f: (f.accepted_at, f.accession))
+    groups = owner_groups(filings)
     by_owner: dict[int, list[InsiderFiling]] = defaultdict(list)
     for f in filings:
-        by_owner[f.owner_cik].append(f)
+        by_owner[groups[f.owner_cik]].append(f)
 
     superseded: set[int] = set()
     for amendment in filings:
         if amendment.is_amendment:
             lots = {_lot(t) for t in amendment.transactions if not t.is_holding}
-            for original in by_owner[amendment.owner_cik]:
+            for original in by_owner[groups[amendment.owner_cik]]:
                 if _amends(amendment, original):
                     superseded.update(id(t) for t in original.transactions if _lot(t) in lots)
 

@@ -228,5 +228,35 @@
   "filingDate": "2024-09-06",
   "acceptanceDateTime": "2024-09-06T16:33:08.000Z",
   "primaryDocument": "xslF345X05/rdgdoc.xml"
+ },
+ {
+  "ticker": "TPL",
+  "cik": 1811074,
+  "name": "Texas Pacific Land Corp",
+  "accession": "0001207097-23-000061",
+  "form": "4",
+  "filingDate": "2023-02-15",
+  "acceptanceDateTime": "2023-02-15T15:36:19.000Z",
+  "primaryDocument": "xslF345X03/primary_doc.xml"
+ },
+ {
+  "ticker": "TPL",
+  "cik": 1811074,
+  "name": "Texas Pacific Land Corp",
+  "accession": "0001056823-23-000012",
+  "form": "4",
+  "filingDate": "2023-02-16",
+  "acceptanceDateTime": "2023-02-16T16:31:45.000Z",
+  "primaryDocument": "xslF345X03/primary_doc.xml"
+ },
+ {
+  "ticker": "CVNA",
+  "cik": 1690820,
+  "name": "CARVANA CO.",
+  "accession": "0001088011-26-000004",
+  "form": "4",
+  "filingDate": "2026-06-04",
+  "acceptanceDateTime": "2026-06-04T22:30:17.000Z",
+  "primaryDocument": "xslF345X06/wk-form4_1780612203.xml"
  }
 ]

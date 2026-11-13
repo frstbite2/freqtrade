@@ -17,6 +17,7 @@ from backend.core.config import load_settings
 from backend.main import create_app
 from backend.models.insider import InsiderFiling, InsiderIssuer, InsiderTransaction
 from backend.services.edgar import EdgarClient, EdgarError
+from backend.services.insider_intelligence import classify
 from backend.services.insider_intelligence.history import effective_transactions, filings_as_of
 from backend.services.insider_intelligence.ingest import ingest_issuer
 from backend.services.insider_intelligence.scoring import score_issuer
@@ -67,6 +68,23 @@ def test_ingest_stores_every_listed_filing_once(db_session, edgar_client):
     issuer = db_session.get(InsiderIssuer, NKE)
     assert (issuer.ticker, issuer.history_since) == ("NKE", SINCE)
     assert datetime.now(UTC) - issuer.last_ingested_at < timedelta(minutes=1)
+
+
+def test_rule_change_reclassifies_stored_filings(db_session, edgar_client, monkeypatch):
+    first = ingest_issuer(db_session, edgar_client, "NKE", SINCE)
+    rows = count(db_session, InsiderTransaction)
+    monkeypatch.setattr(classify, "CLASSIFIER_VERSION", classify.CLASSIFIER_VERSION + 1)
+    again = ingest_issuer(db_session, edgar_client, "NKE", SINCE)
+    assert (again.stored, again.reclassified, again.already_stored) == (
+        first.listed,
+        first.listed,
+        0,
+    )
+    assert count(db_session, InsiderFiling) == first.listed
+    assert count(db_session, InsiderTransaction) == rows
+    assert set(db_session.scalars(select(InsiderFiling.classifier_version))) == {
+        classify.CLASSIFIER_VERSION
+    }
 
 
 def test_stored_values_are_exact_and_link_to_the_sec_filing(db_session, edgar_client):
@@ -352,6 +370,27 @@ def test_holdings_increase_counts_every_lot_the_filing_reports(db_session, edgar
         result["discretionary_buys"]["value"]
         == f"{D('7500') * D('20.3137') + D('5000') * D('19.9186'):.2f}"
     )
+
+
+def test_joint_filers_count_as_one_insider(db_session, edgar_client):
+    """Texas Pacific Land, February 2023: a director and the fund he chairs file jointly
+    (0001207097-23-000061), then the fund files alone (0001056823-23-000012). One buyer, not two."""
+    ingest_issuer(db_session, edgar_client, "TPL", SINCE)
+    result = score_issuer(db_session, 1811074, at("2023-02-17T00:00:00"))
+    joint = D("1918.04") + (2 + 1 + 2 + 3) * D("1895.83") + 12 * D("1899.53")
+    alone = 12 * D("1864.85")
+    assert (joint, alone) == (D("39879.04"), D("22378.20"))
+    assert result["discretionary_buys"] == {
+        "transactions": 7,
+        "insiders": 1,
+        "value": f"{joint + alone:.2f}",
+    }
+    cluster = next(c for c in result["components"] if c["name"] == "cluster")
+    assert cluster["points"] == 0.0 and cluster["detail"].startswith("1 distinct insider")
+    assert {e["insider"] for e in result["evidence"]} == {
+        "STAHL MURRAY",
+        "HORIZON KINETICS ASSET MANAGEMENT LLC",
+    }
 
 
 def test_short_history_makes_buyer_history_unavailable(db_session, edgar_client):

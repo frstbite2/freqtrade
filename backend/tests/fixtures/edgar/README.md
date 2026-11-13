@@ -30,3 +30,5 @@ Original of any file: `https://www.sec.gov/Archives/edgar/data/<cik>/<accession 
 | 0000320187-26-000013 | Nike | Plan sale indicated only by the 10b5-1 checkbox |
 | 0000320187-26-000045, -000043 | Nike | Two more directors buying in the same fortnight (cluster) |
 | 0001437749-24-028607 | Texas Pacific Land | Joint filing by a director and a 10% owner |
+| 0001207097-23-000061, 0001056823-23-000012 | Texas Pacific Land | The same director and fund filing jointly, then the fund alone, a day apart |
+| 0001088011-26-000004 | Carvana | Trades made by an investment manager without the director's knowledge |

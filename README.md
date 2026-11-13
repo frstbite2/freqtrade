@@ -2,8 +2,8 @@
 
 This fork adds a standalone, paper-trading-only AI trading research platform in `backend/`,
 next to the upstream freqtrade crypto bot (documented below, unchanged). Status, architecture,
-roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Milestone 1 of 10
-(foundation) is complete** — there is no market data, analysis or trading yet.
+roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: foundation
+and SEC insider-filing intelligence.** There is no trading yet.
 
 ```bash
 # Local (SQLite)
@@ -17,6 +17,17 @@ curl -H "Authorization: Bearer dev" localhost:8000/api/v1/status
 cp .env.example .env    # then set API_AUTH_TOKEN and POSTGRES_PASSWORD
 docker compose -f docker-compose.platform.yml up -d --build
 ```
+
+Insider filings (SEC Forms 3, 4, 5) need no API key, only a contact string that SEC requires:
+
+```bash
+export SEC_USER_AGENT="Your Name you@example.com"
+.venv/bin/python -m backend.services.insider_intelligence.ingest NKE --since 2023-01-01
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/insider/NKE/score"
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/insider/NKE/transactions?signals_only=true"
+```
+
+Scores are research rankings of disclosed insider buying, not predictions.
 
 Settings live in `config/*.yaml`; secrets only in `.env` (never committed).
 

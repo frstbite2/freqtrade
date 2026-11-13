@@ -2,8 +2,8 @@
 
 Only a voluntary open-market purchase or sale of non-derivative stock can be a signal. Grants and
 other acquisitions from the issuer, exercises, tax withholding, gifts, plan trades (Rule 10b5-1
-or standing instructions), sales to cover taxes, sales tied to a same-day exercise, and
-offering/private transactions never are.
+or standing instructions), trades a third party made without the insider's direction, sales
+to cover taxes, sales tied to a same-day exercise, and offering/private transactions never are.
 When the evidence is ambiguous the row keeps its category but gets an issue, and any row with an
 issue is excluded from signals.
 
@@ -20,6 +20,9 @@ from decimal import Decimal
 
 from backend.services.insider_intelligence.parser import ParsedFiling, Row
 
+
+# Stored with every filing. Bump on any rule change: ingestion then re-classifies stored filings.
+CLASSIFIER_VERSION = 1
 
 # SEC transaction codes (Form 4 general instruction 8).
 CODE_DESCRIPTIONS = {
@@ -68,6 +71,17 @@ _PLAN_NOT_AFFIRMED = re.compile(
 )
 _INSTRUCTIONS = re.compile(
     r"pursuant to (?:[\w-]+\s+){0,4}instructions|pre-?arranged|pre-?established", re.IGNORECASE
+)
+# The reporting person says someone else made the trade: not the insider's own decision.
+# ("Does not exercise investment discretion" is deliberately not matched: joint filers use it
+# for one person while the co-filing fund does decide.)
+_THIRD_PARTY = re.compile(
+    r"without (?:the |his |her |their )?(?:prior )?"
+    r"(?:knowledge|direction|consent|approval|involvement)"
+    r"|blind trust"
+    r"|(?:managed|effected|executed|made) by an? (?:independent |third[\s-]party )?"
+    r"(?:investment |financial )?(?:manager|adviser|advisor|broker)",
+    re.IGNORECASE,
 )
 _SELL_TO_COVER = re.compile(
     r"sell[\s-]to[\s-]cover"
@@ -138,6 +152,8 @@ def _classify_trade(r: Row, exercise_and_sell_day: bool) -> None:
         r.category = "derivative_purchase" if buy else "derivative_sale"
     elif r.plan_10b5_1 or r.plan_basis:
         r.category = "planned_purchase" if buy else "planned_sale"
+    elif _THIRD_PARTY.search(r.transaction_footnotes):
+        r.category = "third_party_managed"
     elif not buy and _SELL_TO_COVER.search(r.transaction_footnotes):
         r.category = "sale_to_cover_taxes"
     elif _NOT_OPEN_MARKET.search(r.transaction_footnotes):
