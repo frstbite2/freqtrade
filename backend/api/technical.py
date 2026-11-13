@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
 from backend.api.market import _call
 from backend.api.routes import require_token
@@ -38,7 +38,13 @@ def _timeframes(raw: str) -> list[str]:
 
 
 @router.get("/{symbol}")
-def technical(request: Request, symbol: Symbol, timeframes: str = "1d,1w") -> dict:
+def technical(
+    request: Request,
+    symbol: Symbol,
+    timeframes: str = "1d,1w",
+    # 0.5 hides bare candlesticks and minor structure events (gaps, imbalances, zones).
+    min_confidence: Annotated[float, Query(ge=0, le=1)] = 0.5,
+) -> dict:
     wanted = _timeframes(timeframes)
     service = request.app.state.market_data
     end = datetime.now(UTC)
@@ -60,5 +66,5 @@ def technical(request: Request, symbol: Symbol, timeframes: str = "1d,1w") -> di
                 "rejected_bars": len(result.rejected),
                 "warnings": result.warnings,
             }
-    body = analyze(symbol.upper(), bars)
+    body = analyze(symbol.upper(), bars, min_confidence=min_confidence)
     return body | {"source": service.source, "adjustment": "split", "data_quality": data_quality}

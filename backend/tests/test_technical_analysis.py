@@ -817,6 +817,15 @@ def test_api_technical_analysis(api):
         adjustment for _, adjustment in provider.calls
     }  # splits must not look like gaps
     assert all(d["symbol"] == "XYZ" for d in day["detections"])
+    # By default only the stronger matches are returned; everything is available on request.
+    assert day["detections"] and all(d["confidence"] >= 0.5 for d in day["detections"])
+    everything = api.get(
+        "/api/v1/technical/xyz", params={"timeframes": "1d", "min_confidence": 0}, headers=AUTH
+    ).json()["timeframes"]["1d"]["detections"]
+    assert len(everything) > len(day["detections"])
+    assert any(d["confidence"] < 0.5 for d in everything)
+    bad = api.get("/api/v1/technical/xyz", params={"min_confidence": 2}, headers=AUTH)
+    assert bad.status_code == 422
 
 
 def test_api_technical_analysis_is_unavailable_without_prices(api):

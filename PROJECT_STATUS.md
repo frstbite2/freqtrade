@@ -369,8 +369,9 @@ invented here.
 - **Thresholds are untuned.** Every rule's numbers (how equal two highs must be, how deep a pattern
   must be, what counts as a squeeze) are reasonable defaults chosen without real data.
 - **Volume of output.** On random walks the engine reports about 30 to 45 events per timeframe in
-  30 bars, mostly fair value gaps and volume imbalances (confidence 0.3 to 0.4). The dashboard
-  and decision engine will need to filter or rank them.
+  30 bars, mostly fair value gaps and volume imbalances (confidence 0.3 to 0.4). The endpoint
+  therefore returns only confidence 0.5 and above unless `min_confidence` says otherwise; the
+  threshold itself is as untuned as the rest.
 - **Patterns from swings.** Chart patterns are found from three-bar swing points, so a pattern
   whose turns are shallower or faster than that is missed, and the swing size is the same on
   every timeframe.

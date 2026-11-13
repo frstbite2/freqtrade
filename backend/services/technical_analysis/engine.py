@@ -84,8 +84,15 @@ def detect_all(df: pd.DataFrame) -> list[Detection]:
     return sorted(detections, key=lambda d: (d.detected_at, d.kind, d.name, d.direction))
 
 
-def analyze(symbol: str, bars_by_timeframe: dict[str, list[Bar]], recent_bars: int = 30) -> dict:
-    """Indicators, levels and the detections of the last `recent_bars` bars per timeframe."""
+def analyze(
+    symbol: str,
+    bars_by_timeframe: dict[str, list[Bar]],
+    recent_bars: int = 30,
+    min_confidence: float = 0.0,
+) -> dict:
+    """Indicators, levels and the detections of the last `recent_bars` bars per timeframe.
+
+    `min_confidence` drops weaker detections after the higher-timeframe adjustment."""
     frames, biases, out = {}, {}, {}
     for timeframe in TIMEFRAMES:  # shortest first
         bars = bars_by_timeframe.get(timeframe)
@@ -152,7 +159,9 @@ def analyze(symbol: str, bars_by_timeframe: dict[str, list[Bar]], recent_bars: i
                 "open_fair_value_gaps": open_fair_value_gaps(df)[-10:],
             },
             "detections": [
-                asdict(d) | {"detected_at": d.detected_at.isoformat()} for d in detections
+                asdict(d) | {"detected_at": d.detected_at.isoformat()}
+                for d in detections
+                if d.confidence >= min_confidence
             ],
         }
     return {"symbol": symbol, "timeframes": out, "disclaimer": DISCLAIMER}
