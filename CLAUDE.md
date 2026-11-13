@@ -50,5 +50,8 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
 - Tests without real data must say so at the top of the file. The Alpaca adapter stays marked
   "live verification pending" in code and in PROJECT_STATUS.md until `test_alpaca_live.py` has passed.
 - Reuse `backend/core/http.py` (retry, request spacing) for any new provider.
+- Technical analysis is unverified on real data until M2 is verified; keep that stated in
+  `engine.py`, the API disclaimer and PROJECT_STATUS.md. Detectors must stay causal: the
+  truncation test in `test_technical_analysis.py` must keep passing.
 - Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
   withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

@@ -1,6 +1,6 @@
 # AI Trading Platform — Project Status
 
-Last updated: 2026-11-13 · Complete and verified: **1, 4** · Built, live verification pending: **2**
+Last updated: 2026-11-13 · Complete and verified: **1, 4** · Built, live verification pending: **2** · Built, unverified on real data: **3**
 
 Milestone 4 (insider filings) was done before Milestone 2 (market data) at the owner's request,
 because SEC EDGAR needs no API key and could be verified against real data immediately.
@@ -88,7 +88,7 @@ the one thing blocking verification of M2, and are needed again for M7.
 
 - [x] **M1 Foundation** — structure, config, logging, database, API, tests, Docker
 - [~] **M2 Market data** — built and unit-tested; **verification against live Alpaca is pending API keys**
-- [ ] **M3 Technical analysis** — indicators, candlestick/chart patterns, market structure
+- [~] **M3 Technical analysis** — built and tested on constructed price series; **not yet run on real market data** (waits on M2)
 - [x] **M4 Insider intelligence** — EDGAR client, Forms 3/4/5 parsing, classification, scoring, history
 - [ ] **M5 Institutional + options** — 13F diffs, 13D/13G, unusual options activity, scoring
 - [ ] **M6 AI engine** — features, models, regime detection, opportunity score, explanations
@@ -109,9 +109,9 @@ the one thing blocking verification of M2, and are needed again for M7.
 | Startup/shutdown audit, graceful shutdown | `backend/main.py` | test; `audit_log` rows observed in Postgres |
 | Docker stack (API + TimescaleDB) | `docker-compose.platform.yml`, `docker/Dockerfile.platform` | built and run; see caveat |
 
-Docker verification, repeated on 2026-11-13 with all code through Milestone 2: the stack starts
+Docker verification, repeated on 2026-11-13 with all code through Milestone 3: the stack starts
 on TimescaleDB, creates all six tables, answers on every endpoint, and the full test suite passes
-inside the image (Python 3.12). Caveat: the development sandbox intercepts TLS, so the image was
+inside the image (Python 3.12, TA-Lib from its binary wheel). Caveat: the development sandbox intercepts TLS, so the image was
 built from a temporary copy of the Dockerfile with two extra lines trusting the sandbox CA. The
 committed Dockerfile is otherwise identical but has not itself been built on a normal network.
 
@@ -314,6 +314,74 @@ needs network access to `data.alpaca.markets`.
 ### Blocked
 
 - Live verification: needs `ALPACA_API_KEY` and `ALPACA_SECRET_KEY`.
+
+## 5c. Milestone 3 — technical analysis (built; UNVERIFIED ON REAL DATA)
+
+**Status in one line:** every indicator and detector is implemented and tested, but only on price
+series constructed for the tests. It was started before Milestone 2 was verified, at the owner's
+request. Nothing about how well these rules work on real markets is known yet.
+
+### What exists
+
+| Component | Location |
+|---|---|
+| Indicators: RSI, MACD, EMA 9/21/50/100/200, SMA 20/50/100/200, session VWAP (intraday), Bollinger Bands, ATR, ADX/DI, OBV, MFI, relative volume, average volume, historical volatility; Fibonacci retracements; volume profile with point of control and value area | `backend/services/technical_analysis/indicators.py` |
+| Candlesticks: engulfing, morning/evening star, hammer, shooting star, doji, three white soldiers, three black crows (TA-Lib recognisers); inside bar, pin bar | `backend/services/technical_analysis/candles.py` |
+| Chart patterns: double/triple tops and bottoms, head and shoulders (and inverse), bull/bear flags, ascending/descending/symmetrical triangles, rising/falling wedges, rounded bottom, cup and handle, breakouts and breakdowns | `backend/services/technical_analysis/patterns.py` |
+| Market structure: swing highs/lows labelled HH/HL/LH/LL, trend, break of structure, change of character, liquidity sweeps, order blocks, fair value gaps (and which are still open), volume imbalances, supply/demand zones, support/resistance, consolidation and expansion, trend exhaustion (RSI divergence) | `backend/services/technical_analysis/structure.py` |
+| Multi-timeframe engine: each detection is checked against the next higher timeframe's bias | `backend/services/technical_analysis/engine.py` |
+| `GET /api/v1/technical/{symbol}?timeframes=1d,1w` | `backend/api/technical.py` |
+
+Every detection carries: name, kind, direction, symbol, timeframe, detection time, confidence,
+explanation, and where it applies an entry zone, stop-loss and targets (the pattern's measured
+move, or 1x and 2x the risk), plus the higher-timeframe check. `historical_performance` always
+says "unavailable": comparable-setup statistics come from backtesting (Milestone 8) and are not
+invented here.
+
+### Design rules
+
+- **No look-ahead.** A swing is only known three bars after its extreme; a pattern is dated at the
+  bar whose close completes it; the higher-timeframe check uses only bars that had closed. Tested
+  by running the engine on truncated histories and requiring identical earlier detections.
+- **Confidence is a rule-match score, not a probability.** Candlesticks start at 0.4 and gain for a
+  preceding move to reverse and for unusual volume; chart patterns start at 0.5 to 0.7 by how
+  cleanly they match. A higher timeframe that agrees adds 0.1; one that disagrees takes 0.15.
+- **Unavailable is not zero.** Indicators without enough history are null. Fewer than 60 bars on a
+  timeframe returns `insufficient_data`.
+- **Split-adjusted prices** feed the analysis, so a stock split does not look like a crash.
+- Distances are measured in ATR, so the same rules apply to a $5 and a $500 stock.
+
+### Verification performed
+
+| Check | Result |
+|---|---|
+| Indicators against independent formulas (SMA, EMA, Bollinger, Wilder RSI and ATR, OBV) | Equal to floating-point precision |
+| Each candlestick and chart pattern on a constructed example | Recognised once, at the expected bar, with the stop on the losing side |
+| Look-alikes (steady trend, flat line, V-shaped recovery, deep pullback, unbroken double top, mismatched highs, ordinary candles, breakout on ordinary volume) | Not reported |
+| No look-ahead, 12 truncation points on seeded random walks | Earlier detections identical |
+| Whole test suite inside the Docker image | Passes |
+| On real market data | **NOT DONE** — needs verified price data (Milestone 2) |
+
+67 tests, all on constructed data, as the top of `backend/tests/test_technical_analysis.py` says.
+
+### Known weaknesses
+
+- **Thresholds are untuned.** Every rule's numbers (how equal two highs must be, how deep a pattern
+  must be, what counts as a squeeze) are reasonable defaults chosen without real data.
+- **Volume of output.** On random walks the engine reports about 30 to 45 events per timeframe in
+  30 bars, mostly fair value gaps and volume imbalances (confidence 0.3 to 0.4). The dashboard
+  and decision engine will need to filter or rank them.
+- **Patterns from swings.** Chart patterns are found from three-bar swing points, so a pattern
+  whose turns are shallower or faster than that is missed, and the swing size is the same on
+  every timeframe.
+- **No machine learning yet.** Random forests, gradient boosting, regime clustering and anomaly
+  detection are Milestone 6 work, which needs real data to train on.
+- The higher-timeframe check uses only the next timeframe up, and only when it was requested.
+
+### Blocked
+
+- Validation on real markets: needs Milestone 2 verified (Alpaca keys).
+- Historical performance of comparable setups: needs Milestone 8.
 
 ## 6. Known shortcuts and deferred items
 

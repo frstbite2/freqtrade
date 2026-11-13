@@ -12,6 +12,7 @@ from backend import __version__
 from backend.api.insider import router as insider_router
 from backend.api.market import router as market_router
 from backend.api.routes import public, rate_limit, v1
+from backend.api.technical import router as technical_router
 from backend.core.config import Settings, get_settings
 from backend.core.logging import setup_logging
 from backend.database.session import init_db, make_engine
@@ -63,4 +64,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(v1)
     app.include_router(insider_router)
     app.include_router(market_router)
+    app.include_router(technical_router)
     return app
