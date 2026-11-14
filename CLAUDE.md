@@ -16,6 +16,7 @@ Update it whenever a milestone item is completed or deferred.
 python3 -m venv .venv && .venv/bin/pip install -r requirements-platform.txt
 cd backend && ../.venv/bin/pytest          # platform tests (own pytest.ini)
 .venv/bin/ruff check backend && .venv/bin/ruff format backend
+.venv/bin/mypy --config-file backend/mypy.ini backend   # must stay at 0 errors
 API_AUTH_TOKEN=dev .venv/bin/uvicorn --factory backend.main:create_app --reload
 docker compose -f docker-compose.platform.yml up -d --build   # needs .env (see .env.example)
 
@@ -27,6 +28,10 @@ cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live -k edgar
 # Institutional holdings (13F); same SEC requirements. No CIK means the tracked_managers in settings.yaml
 .venv/bin/python -m backend.services.institutional_analysis.ingest --since 2024-01-01
 .venv/bin/python -m backend.services.institutional_analysis.verify 01jun2025-31aug2025_form13f.zip
+
+# Large holders (13D/13G) and the scheduler for all SEC ingestion
+.venv/bin/python -m backend.services.beneficial_ownership.ingest GME --since 2024-12-01
+.venv/bin/python -m backend.services.scheduler --once        # run whatever is due; omit --once to loop
 
 # Market data: live verification is PENDING until Alpaca keys exist
 cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.venv/bin/pytest -m live -k alpaca
@@ -60,5 +65,9 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
 - 13F results always state the quarter end and disclosure time, never "currently holds". A 13F-NT or
   a missing quarter is "not comparable", never a sale. Real 13F fixtures live in
   `backend/tests/fixtures/edgar13f/`, stored unmodified.
+- Never blur Schedule 13D (active intent) with 13G (passive). Free-form filings from before December
+  2024 stay "figures unknown"; never guess them. Persons on one filing are never summed.
+- New ingestion goes through `backend/services/scheduler.py` (add a job to `job_table`); it must be
+  idempotent and record failures per target.
 - Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
   withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

@@ -77,11 +77,12 @@ def _first(tree: dict[str, list[ET.Element]], tag: str) -> str | None:
 
 
 def _child(el: ET.Element, *path: str) -> str | None:
+    current: ET.Element | None = el
     for name in path:
-        el = next((c for c in el if c.tag.rsplit("}", 1)[-1] == name), None)
-        if el is None:
+        if current is None:
             return None
-    return (el.text or "").strip() or None
+        current = next((c for c in current if c.tag.rsplit("}", 1)[-1] == name), None)
+    return (current.text or "").strip() or None if current is not None else None
 
 
 def _number(text: str | None) -> Decimal | None:

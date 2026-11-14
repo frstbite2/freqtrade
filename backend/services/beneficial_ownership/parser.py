@@ -174,6 +174,8 @@ def parse_schedule(xml: bytes) -> ParsedSchedule:
         raise ScheduleParseError(f"unsupported submission type {form!r}")
     schedule = schedule_of(form)
     data = _find(root, "formData")
+    if data is None:
+        raise ScheduleParseError("missing form data")
     cover = _find(data, "coverPageHeader")
     issuer = _find(cover, "issuerInfo")
     issuer_cik, issuer_name = _text(issuer, "issuerCik"), _text(issuer, "issuerName")

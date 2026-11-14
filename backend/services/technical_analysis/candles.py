@@ -66,7 +66,7 @@ def detect_candlesticks(df: pd.DataFrame) -> list[Detection]:
     for name, (function, bars, meaning) in _TALIB.items():
         signal = function(o, h, l, c)
         hits += [
-            (i, name, int(signal[i] > 0) - int(signal[i] < 0), bars, meaning)
+            (int(i), name, int(signal[i] > 0) - int(signal[i] < 0), bars, meaning)
             for i in signal.nonzero()[0]
         ]
 

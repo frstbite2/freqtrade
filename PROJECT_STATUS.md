@@ -1,6 +1,6 @@
 # AI Trading Platform — Project Status
 
-Last updated: 2026-11-13 · Complete and verified: **1, 4** · Built, live verification pending: **2** · Built, unverified on real data: **3** · Half done and verified: **5** (13F holdings; options flow not started)
+Last updated: 2026-11-14 · Complete and verified on real data: **1, 4**, and the SEC half of **5** (13F, 13D, 13G), plus scheduled ingestion · Built, live verification pending: **2** · Built, unverified on real data: **3** · Not started: options flow (needs a paid provider), 6 to 10
 
 Milestone 4 (insider filings) was done before Milestone 2 (market data) at the owner's request,
 because SEC EDGAR needs no API key and could be verified against real data immediately.
@@ -90,7 +90,7 @@ the one thing blocking verification of M2, and are needed again for M7.
 - [~] **M2 Market data** — built and unit-tested; **verification against live Alpaca is pending API keys**
 - [~] **M3 Technical analysis** — built and tested on constructed price series; **not yet run on real market data** (waits on M2)
 - [x] **M4 Insider intelligence** — EDGAR client, Forms 3/4/5 parsing, classification, scoring, history
-- [~] **M5 Institutional + options** — 13F holdings, changes and scoring done and verified on real filings; 13D/13G and options flow not started
+- [~] **M5 Institutional + options** — 13F holdings and Schedules 13D/13G done and verified on real filings; options flow not started (needs a paid data provider)
 - [ ] **M6 AI engine** — features, models, regime detection, opportunity score, explanations
 - [ ] **M7 Risk + execution** — position sizing, hard limits, kill switch, paper broker adapters
 - [ ] **M8 Backtesting** — fees, slippage, walk-forward, Monte Carlo, benchmarks
@@ -109,11 +109,21 @@ the one thing blocking verification of M2, and are needed again for M7.
 | Startup/shutdown audit, graceful shutdown | `backend/main.py` | test; `audit_log` rows observed in Postgres |
 | Docker stack (API + TimescaleDB) | `docker-compose.platform.yml`, `docker/Dockerfile.platform` | built and run; see caveat |
 
-Docker verification, repeated on 2026-11-13 with all code through Milestone 3: the stack starts
-on TimescaleDB, creates all six tables, answers on every endpoint, and the full test suite passes
-inside the image (Python 3.12, TA-Lib from its binary wheel). Caveat: the development sandbox intercepts TLS, so the image was
-built from a temporary copy of the Dockerfile with two extra lines trusting the sandbox CA. The
-committed Dockerfile is otherwise identical but has not itself been built on a normal network.
+Docker verification, repeated on 2026-11-14 with all code through Milestone 5: the image was built
+from the committed `docker/Dockerfile.platform`, unmodified. The stack (database, API, worker)
+starts on TimescaleDB and creates all 13 tables; every endpoint answers; and inside the image
+(Python 3.12) the full test suite passes and the type check is clean.
+
+How it was built here, and what that leaves unproven: the development sandbox intercepts TLS, so
+`pip` inside a build cannot verify PyPI. Rather than alter the Dockerfile, the base image tag
+`python:3.12-slim` was pointed at a local copy of the official image with the sandbox's
+certificate added, and the build used host networking to reach the sandbox proxy. On a normal
+network neither is needed, but that plain build has not been run. Containers in the sandbox have
+no route to sec.gov, so the worker's runs there ended as recorded failures, which is the designed
+behaviour; scheduled ingestion against live EDGAR was verified outside the container.
+
+Checks that now gate every change: `pytest` (374 tests), `ruff check` and `ruff format`, and
+`mypy --config-file backend/mypy.ini backend` (0 errors; it reported 91 when first run, all fixed).
 
 ## 5a. Milestone 4 — insider intelligence (complete, with stated limits)
 
@@ -212,8 +222,7 @@ If an ingestion run cannot store a filing, the count is kept on the issuer, retu
 
 ### Not done in this milestone
 
-- Forms 13D, 13G and 13F: Milestone 5.
-- Scheduled or continuous ingestion and alerts: ingestion is a manual command today.
+- Alerts on new insider activity. (Forms 13D/13G/13F and scheduled ingestion are done: see 5d to 5f.)
 - Filings before mid-2003 have no structured document; they are counted in the ingest report
   (`without XML`) and not parsed.
 
@@ -459,9 +468,93 @@ Reproduce: `python -m backend.services.institutional_analysis.verify <data set>.
 
 ### Not done
 
-- Forms 13D and 13G (large individual stakes).
-- Options flow: needs a paid provider (Polygon or Tradier).
-- Scheduled ingestion; like insider data, 13F ingestion is a manual command.
+- Options flow: needs a paid provider (Polygon or Tradier). This is the only part of Milestone 5 left.
+
+## 5e. Milestone 5, part 2 — Schedules 13D and 13G (complete, with stated limits)
+
+### 13D and 13G are different statements
+
+| | Schedule 13D | Schedule 13G |
+|---|---|---|
+| Who files | A holder above 5% who has, or may have, the purpose of influencing or controlling the company | A passive holder above 5%: institutions and passive investors |
+| What it says | The stake and the purpose of the transaction (Item 4) | The stake and the rule relied on; nothing about intent |
+| How fresh | Amended promptly on material changes | Mostly updated quarterly or yearly |
+
+Every record carries its schedule and a plain-language meaning, and the API can filter on it.
+A holder who moves from 13G to 13D is flagged, since that is a statement of changed intent.
+
+### What exists
+
+| Component | Location |
+|---|---|
+| Parser for structured SCHEDULE 13D, 13D/A, 13G, 13G/A (both schema layouts) and for EDGAR's filing header | `backend/services/beneficial_ownership/parser.py` |
+| Ingestion per issuer, idempotent and audited | `backend/services/beneficial_ownership/ingest.py` |
+| History, each holder's latest position, and changes between a holder's filings | `backend/services/beneficial_ownership/history.py` |
+| Tables `beneficial_issuer`, `beneficial_filing`, `beneficial_owner` | `backend/models/beneficial.py` |
+| `GET /api/v1/ownership/{ticker}/holders`, `GET /api/v1/ownership/{ticker}/filings` (both take `as_of` and `schedule`) | `backend/api/ownership.py` |
+
+Stored per filing: schedule, form, amendment number, event date, filing date, public-availability
+time, security and CUSIP, who filed it, the rule (13G) or purpose text (13D), every reporting
+person with shares, percentage of the class and voting/dispositive powers, and a link to the filing.
+
+### Rules that came from the real filings
+
+- **Structured data starts in December 2024.** Earlier filings ("SC 13D", "SC 13G") are free-form
+  documents. They are kept as dated history entries with the filer's name, taken from EDGAR's own
+  header, and with shares and percentage marked unknown. Their numbers are not guessed.
+- **A company's index mixes two things**: stakes others hold in it, and stakes it holds in others.
+  One of Intel's entries is Intel reporting its MariaDB stake. Structured filings are matched on
+  the issuer in the document, free-form ones on the subject company in EDGAR's header.
+- **Persons on one filing are not added up.** A fund, its adviser and its owner each report the
+  same shares. The largest reporting person stands for the filing.
+- **Share changes and percentage changes are separate facts.** Between two of Ryan Cohen's
+  GameStop amendments the share count stayed at 42,082,626 while the stake fell from 9.3% to 8.3%,
+  because the share class grew. Each change reports both, with a note when only one moved, and
+  a note when shares jump but the percentage does not (a split or share-class change).
+- **Holders are followed by name.** The account a filing is submitted under varies (the person, a
+  fund vehicle, a law firm), so a holder's history is linked by the reporting person's name.
+- A filing reporting less than 5% is kept and marked as an exit below the threshold.
+
+### Verification performed (2026-11-14)
+
+| Check | Result |
+|---|---|
+| Real ingestion of 16 issuers since November 2023 | 320 filings stored (197 structured, 123 free-form), 0 failures, 15 filings about other companies skipped |
+| Parser vs an independent text extraction of the same documents (SEC publishes no bulk 13D/13G data set to compare against) | 208 of 208 structured filings and all 407 reporting persons agree on names, shares, percentages, issuer, CUSIP, form and amendment number |
+| Automated tests | 28 tests on 16 real documents stored unmodified |
+
+### Limits
+
+- **Delayed and as of an event date.** Never the holder's position today. A 13G in particular can
+  be a year old.
+- **Percentages are the filer's own.** They are not recomputed, and different filers may use
+  different share counts for the same class.
+- **Name linking** treats "The Vanguard Group" and "VANGUARD GROUP INC" as different holders, and
+  would merge two different holders with identical names.
+- **No history of figures before December 2024**, only the fact and date of each filing.
+- Only the first CUSIP is stored when a filing lists several.
+
+## 5f. Scheduled ingestion (complete)
+
+`python -m backend.services.scheduler` runs as a loop (the `worker` service in the compose file),
+or once with `--once` for cron. Three jobs, each with its own interval in `config/settings.yaml`
+under `ingestion`: `insider` (Forms 3/4/5 for the `watchlist`, hourly), `beneficial` (13D/13G for
+the `watchlist`, every six hours), `institutional` (13F for `tracked_managers`, daily).
+
+| Requirement | How it is met |
+|---|---|
+| Safe to run repeatedly | Ingestion skips filings already stored; a second pass stores nothing and makes no requests for them |
+| Duplicate protection | A unique constraint lets the database hold only one running row per job, so two workers cannot run the same job. A run left "running" past `stale_after_minutes` is closed as abandoned and taken over |
+| Retries | Each request retries with backoff; a failed job is tried again after `retry_after_minutes`; filings that failed are retried on the next run |
+| Failure reporting | Every run is stored in `job_run` with per-target results and an error summary, written to the audit log, logged, and served by `GET /api/v1/jobs` with what is due next |
+| One bad target | Does not stop the others; the run is recorded as `partial` |
+| Graceful stop | On SIGTERM the worker finishes the current job and exits |
+
+Verified: 11 tests (clock-controlled, on the real SEC fixtures) and a live run against EDGAR for
+5 watchlist tickers and 14 managers (all three jobs succeeded; an immediate second pass ran
+nothing).
+
+Not done: alerts when a run fails (it is recorded and visible, but nobody is notified).
 
 ## 6. Known shortcuts and deferred items
 

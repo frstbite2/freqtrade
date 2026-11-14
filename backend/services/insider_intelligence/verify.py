@@ -71,7 +71,7 @@ def _str(text: str | None) -> str | None:
 
 
 def _ours(row: Row, derivative: bool, holding: bool) -> tuple:
-    base = (
+    base: tuple = (
         _str(row.security_title),
         _num(row.shares_after),
         row.ownership,
@@ -96,7 +96,7 @@ def _ours(row: Row, derivative: bool, holding: bool) -> tuple:
 
 
 def _theirs(row: dict, derivative: bool, holding: bool) -> tuple:
-    base = (
+    base: tuple = (
         _str(row["SECURITY_TITLE"]),
         _num(row["SHRS_OWND_FOLWNG_TRANS"]),
         row["DIRECT_INDIRECT_OWNERSHIP"] or None,
@@ -167,7 +167,7 @@ def compare(parsed: ParsedFiling, sec: dict[str, list[dict]]) -> tuple[list[str]
         ),
     }
     differing = [name for name, (ours, theirs) in checks.items() if ours != theirs]
-    realigned = []
+    realigned: list[str] = []
     for name, table, holding in (
         ("NONDERIV_TRANS", "non_derivative", False),
         ("NONDERIV_HOLDING", "non_derivative", True),
@@ -209,7 +209,12 @@ def main() -> None:
             everything = sorted({(r["ACCESSION_NUMBER"], int(r["ISSUERCIK"])) for r in reader})
         sample = random.Random(opts.seed).sample(everything, min(opts.sample, len(everything)))  # noqa: S311
         wanted = {accession for accession, _ in sample}
-        names = ("SUBMISSION", "REPORTINGOWNER", "NONDERIV_TRANS", "NONDERIV_HOLDING")
+        names: tuple[str, ...] = (
+            "SUBMISSION",
+            "REPORTINGOWNER",
+            "NONDERIV_TRANS",
+            "NONDERIV_HOLDING",
+        )
         names += ("DERIV_TRANS", "DERIV_HOLDING")
         tables = {name: _table(archive, f"{name}.tsv", wanted) for name in names}
 

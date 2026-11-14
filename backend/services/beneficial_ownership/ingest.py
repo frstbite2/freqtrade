@@ -77,7 +77,10 @@ def ingest_issuer(session: Session, client: EdgarClient, ticker: str, since: dat
             else:
                 # Free-form document: its contents are not parsed. EDGAR's header still says who
                 # filed it and about which company (a company's index also lists its own stakes).
-                subject, *filer = parse_header(client.filing_header(cik, ref.accession))
+                subject, filer_cik, filer_name = parse_header(
+                    client.filing_header(cik, ref.accession)
+                )
+                filer = (filer_cik, filer_name)
                 if subject != cik:
                     report.other_issuer += 1
                     continue
@@ -116,7 +119,7 @@ def ingest_issuer(session: Session, client: EdgarClient, ticker: str, since: dat
 
 
 def _to_model(
-    cik: int, ref: FilingRef, parsed: ParsedSchedule | None, filer: tuple | list
+    cik: int, ref: FilingRef, parsed: ParsedSchedule | None, filer: tuple[int | None, str]
 ) -> BeneficialFiling:
     filing = BeneficialFiling(
         accession=ref.accession,

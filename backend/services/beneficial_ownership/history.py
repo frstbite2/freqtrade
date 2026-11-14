@@ -101,10 +101,11 @@ def describe(filings: list[BeneficialFiling]) -> list[dict]:
             "filing_url": f.url,
             "change": None,
         }
+        key = holder_key(f)
         if f.structured:
-            if row["holder_key"] in previous:
-                row["change"] = _change(previous[row["holder_key"]], f)
-            previous[row["holder_key"]] = f
+            if key in previous:
+                row["change"] = _change(previous[key], f)
+            previous[key] = f
         out.append(row)
     return out
 
@@ -123,10 +124,13 @@ def _change(before: BeneficialFiling, after: BeneficialFiling) -> dict:
         notes.append("same share count: the percentage moved because the share class changed size")
     # Shares up or down by half or more while the stake barely moves is not trading.
     if (
-        shares
+        old
+        and new
+        and shares
         and percent is not None
         and old.shares
         and old.percent
+        and new.shares is not None
         and abs(new.shares / old.shares - 1) > Decimal("0.5")
         and abs(percent) < old.percent / 5
     ):

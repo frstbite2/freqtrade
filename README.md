@@ -3,7 +3,8 @@
 This fork adds a standalone, paper-trading-only AI trading research platform in `backend/`,
 next to the upstream freqtrade crypto bot (documented below, unchanged). Status, architecture,
 roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: foundation
-and SEC insider-filing and 13F institutional-holdings intelligence, verified on real filings. A market-data adapter for Alpaca and the
+SEC insider filings, 13F institutional holdings and 13D/13G large-holder filings (all verified
+on real filings), and scheduled ingestion for them. A market-data adapter for Alpaca and the
 technical-analysis engine are built, but neither has run on real prices yet (needs Alpaca API
 keys).** There is no trading yet.
 
@@ -41,6 +42,19 @@ curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/institutional/securit
 ```
 
 13F data is a quarter-end snapshot disclosed up to 45 days later, not current holdings.
+
+Holders above 5% (Schedules 13D and 13G), and keeping everything up to date:
+
+```bash
+.venv/bin/python -m backend.services.beneficial_ownership.ingest GME --since 2024-12-01
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/ownership/GME/holders"
+.venv/bin/python -m backend.services.scheduler --once   # or run the `worker` service in Docker
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/jobs"
+```
+
+A 13D filer may seek to influence the company; a 13G filer states it is passive. The tickers and
+managers that are refreshed automatically are `watchlist` and `tracked_managers` in
+`config/settings.yaml`.
 
 Prices need Alpaca keys (free paper keys work) in `.env`; without them the API answers
 "unavailable" rather than inventing data:

@@ -68,13 +68,13 @@ def add_indicators(frame: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     df["avg_volume_20"] = df["volume"].rolling(20).mean()
     # Compared with the 20 bars *before* this one, so a spike is not diluted by itself.
     df["rel_volume"] = df["volume"] / df["avg_volume_20"].shift(1).where(lambda s: s > 0)
-    returns = np.log(df["close"] / df["close"].shift(1))
+    returns = pd.Series(np.log(df["close"].to_numpy(dtype=float)), index=df.index).diff()
     df["hist_vol_20"] = returns.rolling(20).std() * np.sqrt(BARS_PER_YEAR[timeframe])
 
     typical = (df["high"] + df["low"] + df["close"]) / 3
     if TIMEFRAMES[timeframe] < timedelta(days=1):
         # VWAP restarts each trading day (US Eastern calendar date).
-        session = df.index.tz_convert(SESSION_ZONE).date
+        session = pd.DatetimeIndex(df.index).tz_convert(SESSION_ZONE).date
         traded = df["volume"].groupby(session).cumsum()
         df["vwap"] = (typical * df["volume"]).groupby(session).cumsum() / traded.where(traded > 0)
     else:

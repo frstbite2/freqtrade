@@ -13,6 +13,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from backend.core.checks import need
 from backend.models.institutional import InstitutionalFiling
 
 
@@ -129,9 +130,11 @@ def split_ratios(pairs: list[tuple[Report, Report]]) -> dict[str, Decimal | None
                 # The implied price must also have moved the other way, and by more than half
                 # of what the split implies (in ratio terms): a manager who simply doubles a
                 # position leaves the price where it was.
-                undone = None if price is None else price * factor
-                plausible = undone is not None and Decimal("0.5") < undone < 2
-                moved = undone is not None and abs(undone.ln()) < abs(price.ln())
+                if price is None:
+                    continue
+                undone = price * factor
+                plausible = Decimal("0.5") < undone < 2
+                moved = abs(undone.ln()) < abs(price.ln())
                 if carried and plausible and moved:
                     result[cusip] = factor
         if cusip not in result and price is not None and not Decimal("0.45") < price < 2:
@@ -157,7 +160,7 @@ def changes(previous: Report, current: Report, ratios: dict[str, Decimal | None]
     out = []
     for cusip in sorted(previous.positions.keys() | current.positions.keys()):
         before, after = previous.positions.get(cusip), current.positions.get(cusip)
-        described = after or before
+        described = need(after or before, "position")
         old = before.shares if before else Decimal(0)
         new = after.shares if after else Decimal(0)
         note, pct = "", None
@@ -165,7 +168,7 @@ def changes(previous: Report, current: Report, ratios: dict[str, Decimal | None]
             status = "unclear"
             note = "the implied price moved so much that a stock split is likely; not interpreted"
         else:
-            factor = ratios.get(cusip, Decimal(1))
+            factor = ratios.get(cusip) or Decimal(1)
             adjusted = old * factor
             if factor != 1 and old > 0:
                 note = f"previous shares adjusted for a {_split_text(factor)} stock split"
