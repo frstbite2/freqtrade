@@ -98,10 +98,9 @@ class MarketDataService:
         length = TIMEFRAMES[timeframe]
         if (end - start) / length > MAX_BARS_PER_REQUEST:
             raise ValueError(f"range too large: more than {MAX_BARS_PER_REQUEST} {timeframe} bars")
-        if self.source is None:
-            self._require_provider()
-        result = BarsResult(symbol, timeframe, adjustment, self.source, [])
-        key = (symbol, timeframe, adjustment, self.source)
+        source = self.source or f"{self._require_provider().name}"
+        result = BarsResult(symbol, timeframe, adjustment, source, [])
+        key = (symbol, timeframe, adjustment, source)
 
         # Bars starting at or after this may still change, so they are never stored.
         settled_end = max(start, min(end, now - SETTLE - length))

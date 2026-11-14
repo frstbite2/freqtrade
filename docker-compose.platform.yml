@@ -29,5 +29,24 @@ services:
     ports:
       - "127.0.0.1:8000:8000"   # localhost only
 
+  # Scheduled SEC ingestion (Forms 3/4/5, 13D/13G, 13F). Needs SEC_USER_AGENT in .env.
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.platform
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-trading}
+    command: ["python", "-m", "backend.services.scheduler"]
+    healthcheck:
+      disable: true   # the image's check probes the API port, which the worker does not serve
+    volumes:
+      - edgar_cache:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  edgar_cache:

@@ -1,0 +1,162 @@
+[
+ {
+  "ticker": "GME",
+  "cik": 1326380,
+  "name": "GameStop Corp.",
+  "accession": "0000921895-26-002783",
+  "form": "SCHEDULE 13D/A",
+  "filingDate": "2026-10-13",
+  "acceptanceDateTime": "2026-10-13T20:05:28.000Z",
+  "primaryDocument": "xslSCHEDULE_13D_X02/primary_doc.xml"
+ },
+ {
+  "ticker": "GME",
+  "cik": 1326380,
+  "name": "GameStop Corp.",
+  "accession": "0000921895-26-002474",
+  "form": "SCHEDULE 13D/A",
+  "filingDate": "2026-09-03",
+  "acceptanceDateTime": "2026-09-03T22:42:51.000Z",
+  "primaryDocument": "xslSCHEDULE_13D_X02/primary_doc.xml"
+ },
+ {
+  "ticker": "GME",
+  "cik": 1326380,
+  "name": "GameStop Corp.",
+  "accession": "0000102909-26-001393",
+  "form": "SCHEDULE 13G/A",
+  "filingDate": "2026-03-26",
+  "acceptanceDateTime": "2026-03-26T22:39:53.000Z",
+  "primaryDocument": "xslSCHEDULE_13G_X02/primary_doc.xml"
+ },
+ {
+  "ticker": "GME",
+  "cik": 1326380,
+  "name": "GameStop Corp.",
+  "accession": "0000921895-26-000120",
+  "form": "SCHEDULE 13D/A",
+  "filingDate": "2026-01-21",
+  "acceptanceDateTime": "2026-01-21T21:01:50.000Z",
+  "primaryDocument": "xslSCHEDULE_13D_X01/primary_doc.xml"
+ },
+ {
+  "ticker": "GME",
+  "cik": 1326380,
+  "name": "GameStop Corp.",
+  "accession": "0000921895-24-001394",
+  "form": "SC 13D/A",
+  "filingDate": "2024-06-11",
+  "acceptanceDateTime": "2024-06-11T21:21:29.000Z",
+  "primaryDocument": "sc13da912128005_06112024.htm"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0002100121-26-001085",
+  "form": "SCHEDULE 13G",
+  "filingDate": "2026-10-30",
+  "acceptanceDateTime": "2026-10-30T17:53:42.000Z",
+  "primaryDocument": "xslSCHEDULE_13G_X02/primary_doc.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0001422849-26-000147",
+  "form": "SCHEDULE 13G",
+  "filingDate": "2026-08-12",
+  "acceptanceDateTime": "2026-08-12T21:40:15.000Z",
+  "primaryDocument": "xslSCHEDULE_13G_X02/primary_doc.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000093751-26-000274",
+  "form": "SCHEDULE 13G",
+  "filingDate": "2026-05-12",
+  "acceptanceDateTime": "2026-05-12T15:42:26.000Z",
+  "primaryDocument": "xslSCHEDULE_13G_X02/primary_doc.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0002100119-26-000802",
+  "form": "SCHEDULE 13G",
+  "filingDate": "2026-04-30",
+  "acceptanceDateTime": "2026-04-30T15:33:27.000Z",
+  "primaryDocument": "xslSCHEDULE_13G_X02/primary_doc.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000102909-26-001994",
+  "form": "SCHEDULE 13G/A",
+  "filingDate": "2026-03-27",
+  "acceptanceDateTime": "2026-03-27T15:08:36.000Z",
+  "primaryDocument": "xslSCHEDULE_13G_X02/primary_doc.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000093751-25-000620",
+  "form": "SCHEDULE 13G",
+  "filingDate": "2025-11-10",
+  "acceptanceDateTime": "2025-11-10T13:46:59.000Z",
+  "primaryDocument": "xslSCHEDULE_13G_X01/primary_doc.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0000093751-25-000469",
+  "form": "SCHEDULE 13G",
+  "filingDate": "2025-08-11",
+  "acceptanceDateTime": "2025-08-11T11:44:15.000Z",
+  "primaryDocument": "xslSCHEDULE_13G_X01/primary_doc.xml"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0001104659-24-021564",
+  "form": "SC 13G/A",
+  "filingDate": "2024-02-13",
+  "acceptanceDateTime": "2024-02-13T22:09:44.000Z",
+  "primaryDocument": "tv01553-nikeincclassb.htm"
+ },
+ {
+  "ticker": "NKE",
+  "cik": 320187,
+  "name": "NIKE, Inc.",
+  "accession": "0001086364-24-004600",
+  "form": "SC 13G/A",
+  "filingDate": "2024-01-26",
+  "acceptanceDateTime": "2024-01-26T21:23:45.000Z",
+  "primaryDocument": "us6541061031_012624.txt"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0000050863-24-000116",
+  "form": "SC 13G/A",
+  "filingDate": "2024-07-25",
+  "acceptanceDateTime": "2024-07-25T20:55:22.000Z",
+  "primaryDocument": "mariadbplc13gaexitfiling.htm"
+ },
+ {
+  "ticker": "INTC",
+  "cik": 50863,
+  "name": "INTEL CORP",
+  "accession": "0001104659-24-021208",
+  "form": "SC 13G/A",
+  "filingDate": "2024-02-13",
+  "acceptanceDateTime": "2024-02-13T22:07:58.000Z",
+  "primaryDocument": "tv01202-intelcorp.htm"
+ }
+]

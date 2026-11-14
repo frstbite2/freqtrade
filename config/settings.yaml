@@ -27,3 +27,22 @@ tracked_managers:
   - 1791786   # Elliott Investment Management
   - 921669    # Carl C. Icahn
   - 1336528   # Pershing Square Capital Management
+
+# Companies whose insider (Forms 3/4/5) and 13D/13G filings are ingested, by ticker.
+watchlist:
+  - AAPL
+  - NKE
+  - INTC
+  - GME
+  - CVNA
+
+# Scheduled ingestion, run by the worker: python -m backend.services.scheduler
+# SEC filings appear throughout the day (Forms 3/4/5, 13D/13G) or quarterly (13F).
+ingestion:
+  enabled: true
+  insider_every_minutes: 60
+  beneficial_every_minutes: 360
+  institutional_every_minutes: 1440
+  retry_after_minutes: 15       # wait after a failed run before trying again
+  stale_after_minutes: 180      # a run still marked running after this is treated as abandoned
+  poll_seconds: 60

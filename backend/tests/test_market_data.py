@@ -675,3 +675,12 @@ def test_api_validates_input(api, provider, path, params):
 
 def test_api_requires_token(api):
     assert api.get("/api/v1/market/AAPL/bars").status_code == 401
+
+
+def test_api_literals_match_the_supported_timeframes_and_adjustments():
+    from typing import get_args
+
+    from backend.api.market import Adjustment, Timeframe
+    from backend.services.market_data.base import ADJUSTMENTS, TIMEFRAMES
+
+    assert get_args(Timeframe) == tuple(TIMEFRAMES) and get_args(Adjustment) == ADJUSTMENTS

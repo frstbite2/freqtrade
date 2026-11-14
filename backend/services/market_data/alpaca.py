@@ -14,6 +14,7 @@ from decimal import Decimal
 
 import httpx
 
+from backend.core.checks import need
 from backend.core.http import RetriesExhausted, Throttle, get_with_retry
 from backend.services.market_data.base import (
     Bar,
@@ -60,6 +61,10 @@ def _number(item: dict, key: str, required: bool = True) -> Decimal | None:
     if isinstance(raw, bool) or not isinstance(raw, int | Decimal):
         raise ValueError(f"field {key!r} is not a number: {raw!r}")
     return Decimal(raw)
+
+
+def _required(item: dict, key: str) -> Decimal:
+    return need(_number(item, key), key)
 
 
 class AlpacaMarketData:
@@ -170,11 +175,11 @@ class AlpacaMarketData:
                 symbol=symbol,
                 timeframe=timeframe,
                 ts=_timestamp(raw.get("t")),
-                open=_number(raw, "o"),
-                high=_number(raw, "h"),
-                low=_number(raw, "l"),
-                close=_number(raw, "c"),
-                volume=_number(raw, "v"),
+                open=_required(raw, "o"),
+                high=_required(raw, "h"),
+                low=_required(raw, "l"),
+                close=_required(raw, "c"),
+                volume=_required(raw, "v"),
                 trade_count=None if count is None else int(count),
                 vwap=_number(raw, "vw", required=False),
             )
@@ -192,10 +197,10 @@ class AlpacaMarketData:
             return Quote(
                 symbol=symbol,
                 ts=_timestamp(raw.get("t")),
-                bid_price=_number(raw, "bp"),
-                bid_size=_number(raw, "bs"),
-                ask_price=_number(raw, "ap"),
-                ask_size=_number(raw, "as"),
+                bid_price=_required(raw, "bp"),
+                bid_size=_required(raw, "bs"),
+                ask_price=_required(raw, "ap"),
+                ask_size=_required(raw, "as"),
             )
         except ValueError as exc:
             raise MarketDataError(f"Alpaca sent a malformed quote for {symbol}: {exc}") from exc

@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request
 
 from backend.api.routes import require_token
 from backend.services.market_data.base import (
-    ADJUSTMENTS,
     TIMEFRAMES,
     MarketDataError,
     ProviderNotConfigured,
@@ -18,8 +17,9 @@ from backend.services.market_data.base import (
 router = APIRouter(prefix="/api/v1/market", dependencies=[Depends(require_token)])
 
 Symbol = Annotated[str, Path(pattern=r"^[A-Za-z][A-Za-z0-9.\-]{0,9}$")]
-Timeframe = Literal[tuple(TIMEFRAMES)]  # type: ignore[valid-type]
-Adjustment = Literal[ADJUSTMENTS]  # type: ignore[valid-type]
+# Spelled out for the type checker; a test keeps them equal to TIMEFRAMES and ADJUSTMENTS.
+Timeframe = Literal["1m", "5m", "15m", "1h", "4h", "1d", "1w"]
+Adjustment = Literal["raw", "split", "dividend", "all"]
 
 
 def _call(function, *args, **kwargs):

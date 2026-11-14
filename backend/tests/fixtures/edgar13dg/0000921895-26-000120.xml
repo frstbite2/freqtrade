@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13D" xmlns:com="http://www.sec.gov/edgar/common">
+  <headerData>
+    <submissionType>SCHEDULE 13D/A</submissionType>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <!-- Field: Pseudo-Tag; ID: Name; Data: Cohen Ryan -->
+          <cik>0001767470</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <amendmentNo>14</amendmentNo>
+      <securitiesClassTitle>Class A Common Stock, $0.001 par value per share</securitiesClassTitle>
+      <dateOfEvent>01/21/2026</dateOfEvent>
+      <previouslyFiledFlag>false</previouslyFiledFlag>
+      <issuerInfo>
+        <issuerCIK>0001326380</issuerCIK>
+        <issuerCUSIP>36467W109</issuerCUSIP>
+        <issuerName>GameStop Corp.</issuerName>
+        <address>
+          <com:street1>625 WESTPORT PARKWAY</com:street1>
+          <com:city>GRAPEVINE</com:city>
+          <com:stateOrCountry>TX</com:stateOrCountry>
+          <com:zipCode>76051</com:zipCode>
+        </address>
+      </issuerInfo>
+      <authorizedPersons>
+        <notificationInfo>
+          <personName>RYAN NEBEL</personName>
+          <personPhoneNum>212-451-2300</personPhoneNum>
+          <personAddress>
+            <com:street1>OLSHAN FROME WOLOSKY LLP</com:street1>
+            <com:street2>1325 Avenue of the Americas</com:street2>
+            <com:city>New York</com:city>
+            <com:stateOrCountry>NY</com:stateOrCountry>
+            <com:zipCode>10019</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+      </authorizedPersons>
+    </coverPageHeader>
+    <reportingPersons>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0001767470</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>Cohen Ryan</reportingPersonName>
+        <fundType>PF</fundType>
+        <fundType>OO</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>Z4</citizenshipOrOrganization>
+        <soleVotingPower>42082626.00</soleVotingPower>
+        <sharedVotingPower>0.00</sharedVotingPower>
+        <soleDispositivePower>42082626.00</soleDispositivePower>
+        <sharedDispositivePower>0.00</sharedDispositivePower>
+        <aggregateAmountOwned>42082626.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>9.3</percentOfClass>
+        <typeOfReportingPerson>IN</typeOfReportingPerson>
+      </reportingPersonInfo>
+    </reportingPersons>
+    <items1To7>
+      <item1>
+        <securityTitle>Class A Common Stock, $0.001 par value per share</securityTitle>
+        <issuerName>GameStop Corp.</issuerName>
+        <issuerPrincipalAddress>
+          <com:street1>625 WESTPORT PARKWAY</com:street1>
+          <com:city>GRAPEVINE</com:city>
+          <com:stateOrCountry>TX</com:stateOrCountry>
+          <com:zipCode>76051</com:zipCode>
+        </issuerPrincipalAddress>
+      </item1>
+      <item3>
+        <fundsSource>Item 3 is hereby amended and restated to read as follows:
+
+The Shares directly owned by Mr. Cohen were purchased with personal funds (which may, at any given time, include margin loans made by brokerage firms in the ordinary course of business). The aggregate purchase price of the 38,347,842 Shares directly owned by Mr. Cohen is approximately $128,210,281, excluding brokerage commissions.
+
+Mr. Cohen also owns 3,734,784 Warrants, which Mr. Cohen received from the Issuer for no consideration pursuant to a warrant dividend distribution to the Issuer's stockholders (as further explained in Amendment No. 12 to the Schedule 13D).</fundsSource>
+      </item3>
+      <item4>
+        <transactionPurpose>Item 4 is hereby amended to add the following:
+
+The Reporting Person believes that it is essential for the Chief Executive Officer of any public company to purchase shares of such company in the open market with his or her own personal funds in order to further strengthen alignment with stockholders. The Reporting Person believes that any Chief Executive Officer who fails to do so should be fired.</transactionPurpose>
+      </item4>
+      <item5>
+        <percentageOfClassSecurities>Item 5(a) is hereby amended and restated to read as follows:
+
+The aggregate percentage of Shares reported owned by the Reporting Person is based upon 448,009,480 Shares outstanding as of December 5, 2025 as reported in the Issuer's Quarterly Report on Form 10-Q filed with the Securities and Exchange Commission on December 9, 2025, plus the Shares underlying the Warrants that may be exercised by the Reporting Person.
+
+As of the date hereof, Mr. Cohen directly beneficially owned 42,082,626 Shares, including 3,734,784 Shares underlying the Warrants, constituting approximately 9.3% of the Shares outstanding.</percentageOfClassSecurities>
+        <transactionDesc>Item 5(c) is hereby amended and restated to read as follows:
+
+On January 21, 2026, Mr. Cohen purchased an aggregate of 500,000 Shares at a weighted average price of $21.6010 per Share in multiple transactions at prices ranging from $21.5479 to $21.6100, inclusive. The Reporting Person undertakes to provide the Issuer, any security holder of the Issuer or the staff of the Securities and Exchange Commission, upon request, full information regarding the number of securities purchased at each separate price. All of such transactions were effected in the open market.
+
+Except as otherwise disclosed herein, there have been no transactions in securities of the Issuer by the Reporting Person since the filing of Amendment No. 13 to the Schedule 13D.</transactionDesc>
+      </item5>
+    </items1To7>
+    <signatureInfo>
+      <signaturePerson>
+        <signatureReportingPerson>Cohen Ryan</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Ryan Cohen</signature>
+          <title>Ryan Cohen</title>
+          <date>01/21/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+    </signatureInfo>
+  </formData>
+</edgarSubmission>

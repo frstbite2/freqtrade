@@ -76,6 +76,18 @@ class StrategiesConfig(_Strict):
     scoring_weights: ScoringWeights = ScoringWeights()
 
 
+class IngestionSchedule(_Strict):
+    """How often the worker (`python -m backend.services.scheduler`) refreshes SEC data."""
+
+    enabled: bool = True
+    insider_every_minutes: int = Field(60, ge=5)  # Forms 3/4/5 for the watchlist
+    beneficial_every_minutes: int = Field(360, ge=5)  # Schedules 13D/13G for the watchlist
+    institutional_every_minutes: int = Field(1440, ge=5)  # Form 13F for the tracked managers
+    retry_after_minutes: int = Field(15, ge=1)  # wait this long after a failed run
+    stale_after_minutes: int = Field(180, ge=5)  # a run still "running" after this was abandoned
+    poll_seconds: int = Field(60, ge=1)
+
+
 class AppConfig(_Strict):
     environment: Literal["development", "test", "production"] = "development"
     # Only paper trading exists. Live trading gets its own gated config in Milestone 7.
@@ -93,6 +105,9 @@ class AppConfig(_Strict):
     api_rate_limit_per_minute: int = Field(120, ge=1, le=10_000)  # per client address
     # Investment managers (SEC CIK numbers) whose quarterly 13F filings are tracked.
     tracked_managers: tuple[int, ...] = ()
+    # Tickers whose insider (Forms 3/4/5) and 13D/13G filings are ingested on a schedule.
+    watchlist: tuple[str, ...] = ()
+    ingestion: IngestionSchedule = IngestionSchedule()
 
 
 class Settings(_Strict):

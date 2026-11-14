@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13D" xmlns:com="http://www.sec.gov/edgar/common">
+  <schemaVersion>X0202</schemaVersion>
+<headerData>
+    <submissionType>SCHEDULE 13D/A</submissionType>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <!-- Field: Pseudo-Tag; ID: Name; Data: Cohen Ryan -->
+          <cik>0001767470</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <amendmentNo>15</amendmentNo>
+      <securitiesClassTitle>Class A Common Stock, $0.001 par value per share</securitiesClassTitle>
+      <dateOfEvent>09/03/2026</dateOfEvent>
+      <previouslyFiledFlag>false</previouslyFiledFlag>
+      <issuerInfo>
+        <issuerCIK>0001326380</issuerCIK>
+        <issuerCusips>
+          <issuerCusipNumber>36467W109</issuerCusipNumber>
+        </issuerCusips>
+        <issuerName>GameStop Corp.</issuerName>
+        <address>
+          <com:street1>625 WESTPORT PARKWAY</com:street1>
+          <com:city>GRAPEVINE</com:city>
+          <com:stateOrCountry>TX</com:stateOrCountry>
+          <com:zipCode>76051</com:zipCode>
+        </address>
+      </issuerInfo>
+      <authorizedPersons>
+        <notificationInfo>
+          <personName>RYAN NEBEL</personName>
+          <personPhoneNum>212-451-2300</personPhoneNum>
+          <personAddress>
+            <com:street1>OLSHAN FROME WOLOSKY LLP</com:street1>
+            <com:street2>1325 Avenue of the Americas</com:street2>
+            <com:city>New York</com:city>
+            <com:stateOrCountry>NY</com:stateOrCountry>
+            <com:zipCode>10019</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+      </authorizedPersons>
+    </coverPageHeader>
+    <reportingPersons>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0001767470</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>Cohen Ryan</reportingPersonName>
+        <fundType>PF</fundType>
+        <fundType>OO</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>Z4</citizenshipOrOrganization>
+        <soleVotingPower>42082626.00</soleVotingPower>
+        <sharedVotingPower>0.00</sharedVotingPower>
+        <soleDispositivePower>42082626.00</soleDispositivePower>
+        <sharedDispositivePower>0.00</sharedDispositivePower>
+        <aggregateAmountOwned>42082626.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>8.3</percentOfClass>
+        <typeOfReportingPerson>IN</typeOfReportingPerson>
+      </reportingPersonInfo>
+    </reportingPersons>
+    <items1To7>
+      <item1>
+        <securityTitle>Class A Common Stock, $0.001 par value per share</securityTitle>
+        <issuerName>GameStop Corp.</issuerName>
+        <issuerPrincipalAddress>
+          <com:street1>625 WESTPORT PARKWAY</com:street1>
+          <com:city>GRAPEVINE</com:city>
+          <com:stateOrCountry>TX</com:stateOrCountry>
+          <com:zipCode>76051</com:zipCode>
+        </issuerPrincipalAddress>
+        <commentText>This Amendment No. 15 to the Schedule 13D was triggered solely due to an increase in the number of outstanding Shares of the Issuer in connection with the Issuer's previously announced exchanges of its convertible notes. The Reporting Person has not sold any Shares.</commentText>
+      </item1>
+      <item5>
+        <percentageOfClassSecurities>Item 5(a) is hereby amended and restated to read as follows:
+
+The aggregate percentage of Shares reported owned by the Reporting Person is based upon 504,500,979 Shares outstanding as of September 3, 2026 based on information provided by the Issuer to the Reporting Person on such date, plus the Shares underlying the Warrants that may be exercised by the Reporting Person.
+
+As of the date hereof, Mr. Cohen directly beneficially owned 42,082,626 Shares, including 3,734,784 Shares underlying the Warrants, constituting approximately 8.3% of the Shares outstanding.</percentageOfClassSecurities>
+        <transactionDesc>Item 5(c) is hereby amended and restated to read as follows:
+
+There have been no transactions in securities of the Issuer by the Reporting Person during the past 60 days.</transactionDesc>
+      </item5>
+    </items1To7>
+    <signatureInfo>
+      <signaturePerson>
+        <signatureReportingPerson>Cohen Ryan</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Ryan Cohen</signature>
+          <title>Ryan Cohen</title>
+          <date>09/03/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+    </signatureInfo>
+  </formData>
+</edgarSubmission>

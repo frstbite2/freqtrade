@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy import func, select
 
 from backend.api.routes import require_token
+from backend.core.checks import need
 from backend.models.institutional import (
     InstitutionalFiling,
     InstitutionalHolding,
@@ -119,14 +120,14 @@ def manager_changes(
         by_manager, reports, skipped = quarter_changes(session, period, moment)
         if cik not in by_manager:
             raise HTTPException(404, f"{manager.name} has no comparable reports ({skipped[cik]}).")
-        rows = sorted(by_manager[cik], key=lambda c: -max(c.value, 0))
+        rows = sorted(by_manager[cik], key=lambda c: c.value, reverse=True)
         current = reports[cik][1]
         return {
             "institution": manager.name,
             "manager_cik": cik,
             "period": period.isoformat(),
             "previous_period": previous_quarter(period).isoformat(),
-            "disclosed_at": current.disclosed_at.isoformat(),
+            "disclosed_at": need(current.disclosed_at, "disclosure time").isoformat(),
             "filings": current.filings,
             "confidential_positions_omitted": current.confidential_omitted,
             "option_rows_not_shown": current.option_rows,

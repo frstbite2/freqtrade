@@ -25,6 +25,11 @@ def record_audit(session: Session, actor: str, action: str, **detail) -> None:
     session.commit()
 
 
+from backend.models.beneficial import (  # noqa: E402,F401
+    BeneficialFiling,
+    BeneficialIssuer,
+    BeneficialOwner,
+)
 from backend.models.insider import (  # noqa: E402,F401  registers the tables
     InsiderFiling,
     InsiderIssuer,
@@ -35,4 +40,5 @@ from backend.models.institutional import (  # noqa: E402,F401
     InstitutionalHolding,
     InstitutionalManager,
 )
+from backend.models.jobs import JobRun  # noqa: E402,F401
 from backend.models.market import PriceBar, PriceCoverage  # noqa: E402,F401

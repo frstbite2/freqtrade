@@ -168,6 +168,10 @@ class EdgarClient:
             raise EdgarError(f"unexpected submissions format for CIK {cik}: {exc!r}") from exc
 
     def ownership_xml(self, cik: int, ref: FilingRef) -> bytes:
+        return self.primary_xml(cik, ref, b"<ownershipDocument")
+
+    def primary_xml(self, cik: int, ref: FilingRef, must_contain: bytes) -> bytes:
+        """The filing's primary document as raw XML."""
         # The index lists the XSL-rendered path (xslF345X06/form4.xml); the raw XML sits beside it.
         document = ref.primary_document.rsplit("/", 1)[-1]
         if not _ACCESSION.match(ref.accession) or not _DOCUMENT.match(document):
@@ -176,7 +180,18 @@ class EdgarClient:
             f"https://www.sec.gov/Archives/edgar/data/{cik}/{ref.accession.replace('-', '')}"
             f"/{document}",
             max_age=None,
-            must_contain=b"<ownershipDocument",
+            must_contain=must_contain,
+        )
+
+    def filing_header(self, cik: int, accession: str) -> bytes:
+        """EDGAR's own header page for a filing (who filed it, about which company)."""
+        if not _ACCESSION.match(accession):
+            raise EdgarError(f"unsafe accession number: {accession!r}")
+        return self.get(
+            f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession.replace('-', '')}"
+            f"/{accession}-index-headers.html",
+            max_age=None,
+            must_contain=b"ACCEPTANCE-DATETIME",
         )
 
     def submission_text(self, cik: int, accession: str) -> bytes:
