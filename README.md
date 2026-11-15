@@ -21,6 +21,9 @@ cp .env.example .env    # then set API_AUTH_TOKEN and POSTGRES_PASSWORD
 docker compose -f docker-compose.platform.yml up -d --build
 ```
 
+The database schema is versioned with Alembic (`backend/migrations/`). The platform upgrades its
+database on start, including one created by an earlier version; existing data is kept.
+
 Insider filings (SEC Forms 3, 4, 5) need no API key, only a contact string that SEC requires:
 
 ```bash

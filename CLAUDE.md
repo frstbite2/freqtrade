@@ -33,6 +33,10 @@ cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live -k edgar
 .venv/bin/python -m backend.services.beneficial_ownership.ingest GME --since 2024-12-01
 .venv/bin/python -m backend.services.scheduler --once        # run whatever is due; omit --once to loop
 
+# Schema changes: edit the model, generate a migration, review it. The app upgrades itself on start.
+.venv/bin/alembic -c backend/alembic.ini revision --autogenerate -m "what changed"
+.venv/bin/alembic -c backend/alembic.ini upgrade head     # or: downgrade -1, current, history
+
 # Market data: live verification is PENDING until Alpaca keys exist
 cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.venv/bin/pytest -m live -k alpaca
 ```
@@ -69,5 +73,8 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
   2024 stay "figures unknown"; never guess them. Persons on one filing are never summed.
 - New ingestion goes through `backend/services/scheduler.py` (add a job to `job_table`); it must be
   idempotent and record failures per target.
+- Every model change ships with an Alembic migration that has a working downgrade
+  (`test_migrations.py` fails otherwise). Never edit a migration that has been merged; add a new
+  one. A migration must not drop or rewrite stored data without the user's explicit approval.
 - Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
   withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

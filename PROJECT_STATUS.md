@@ -564,11 +564,40 @@ nothing).
 
 Not done: alerts when a run fails (it is recorded and visible, but nobody is notified).
 
+## 5g. Database migrations (complete)
+
+The schema is now managed by Alembic (`backend/migrations/`); `create_all` is gone. Every start of
+the API, the worker and the ingestion commands upgrades the database to the newest revision.
+
+| Behaviour | How |
+|---|---|
+| Fresh database | Revision `0001` creates all 13 tables. |
+| Database created before migrations | `0001` creates only the tables that are missing and records the revision. Existing tables and rows are not touched. |
+| Reversible | Every revision has a downgrade. Reversing `0001` drops the tables, so it refuses to run while any of them holds a row. |
+| API and worker starting together | On PostgreSQL the migration takes a transaction-level advisory lock, so the second process waits. |
+| Model changed without a migration | A test compares the migrated schema with the models and fails. |
+| Schema differs from the models at start-up | Logged as an error with the differences (never altered silently). |
+
+Changing the schema: edit the model, then
+`alembic -c backend/alembic.ini revision --autogenerate -m "what changed"`, review the generated
+file, and add a test if it moves data.
+
+Verified (2026-11-15): 8 tests, run on SQLite and on PostgreSQL 16 (TimescaleDB image),
+including (PostgreSQL only) four processes migrating a fresh database at once (fails without the lock, passes with
+it). In the sandbox Docker stack, a database created by the previous image was adopted by the new
+one: revision recorded, row counts only grew, no drift reported, and `downgrade base` refused
+because tables held data. CI runs the migration tests against a PostgreSQL service.
+
+Not done: offline SQL script generation (`alembic --sql`); TimescaleDB hypertables (no table uses
+them yet).
+
 ## 6. Known shortcuts and deferred items
 
-- Schema is created with `create_all`, which cannot alter existing tables. A development database
-  created before a model change must be deleted and re-ingested (filings are cached). Adopt
-  Alembic before the first deployment that must keep its data.
+- Migrations (section 5g): a table that existed before migrations and predates a column added to
+  its model since is reported at start-up, not repaired. No such database is known; if the
+  message appears, write a migration for the missing column.
+- Migration downgrades are tested on empty tables only (the baseline refuses to drop data); each
+  future migration that changes data needs its own test with rows in place.
 - SQLite stores decimals as floating point (about 15 significant digits); PostgreSQL is exact.
 - Redis is not in the stack. The price cache is the database; add Redis only when something
   needs shared short-lived state (for example streaming quotes or job coordination).
