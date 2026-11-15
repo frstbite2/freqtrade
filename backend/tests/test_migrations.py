@@ -28,7 +28,8 @@ from backend.database.session import (
     schema_drift,
 )
 from backend.models import AuditLog
-from backend.models.insider import InsiderIssuer
+from backend.models.insider import InsiderFiling, InsiderIssuer
+from backend.services.insider_intelligence.classify import CLASSIFIER_VERSION
 
 
 URLS = ["sqlite"] + [u for u in [os.environ.get("MIGRATION_TEST_DATABASE_URL")] if u]
@@ -208,8 +209,32 @@ def test_table_missing_a_newer_column_gets_it_and_keeps_its_rows(engine, caplog)
                 failed_filings=3,
             )
         )
+        s.add(
+            InsiderFiling(
+                accession="0000320187-24-000001",
+                form_type="4",
+                issuer_cik=320187,
+                issuer_name="NIKE",
+                issuer_ticker="NKE",
+                period_of_report=date(2024, 1, 2),
+                filed_date=date(2024, 1, 3),
+                accepted_at=datetime(2024, 1, 3, 21, 5, tzinfo=UTC),
+                original_filed_date=None,
+                aff10b5one=False,
+                owner_cik=1234567,
+                owner_name="OWNER",
+                is_director=True,
+                is_officer=False,
+                is_ten_percent_owner=False,
+                officer_title=None,
+                owners=[],
+                remarks="",
+                url="https://www.sec.gov/Archives/edgar/data/320187/000032018724000001/x.xml",
+                classifier_version=1,
+            )
+        )
         s.commit()
-    with engine.begin() as conn:  # the table as the first insider version made it
+    with engine.begin() as conn:  # the tables as the first insider version made them
         conn.execute(text("ALTER TABLE insider_issuer DROP COLUMN failed_filings"))
         conn.execute(text("ALTER TABLE insider_filing DROP COLUMN classifier_version"))
     init_db(engine)
@@ -217,6 +242,14 @@ def test_table_missing_a_newer_column_gets_it_and_keeps_its_rows(engine, caplog)
     with sessionmaker(engine)() as s:
         issuer = s.scalars(select(InsiderIssuer)).one()
         assert (issuer.ticker, issuer.failed_filings) == ("NKE", 0)
+        filing = s.scalars(select(InsiderFiling)).one()
+        assert (filing.accession, filing.owner_name, filing.accepted_at) == (
+            "0000320187-24-000001",
+            "OWNER",
+            datetime(2024, 1, 3, 21, 5, tzinfo=UTC),
+        )
+        # 0 is below every real classifier version, so the next ingestion re-classifies it.
+        assert filing.classifier_version == 0 < CLASSIFIER_VERSION
 
 
 def test_missing_index_is_reported_and_nothing_is_lost(engine, caplog):
