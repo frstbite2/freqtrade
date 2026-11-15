@@ -124,7 +124,9 @@ The full compose stack (database, API, worker together) has still only been star
 no route to sec.gov, so the worker's runs there ended as recorded failures, which is the designed
 behaviour; scheduled ingestion against live EDGAR was verified outside the container.
 
-Checks that now gate every change: `pytest` (374 tests), `ruff check` and `ruff format`, and
+Checks that now gate every change: `pytest` (403 tests pass with PostgreSQL available for the
+migration tests, 391 on SQLite alone; 12 opt-in or database-specific tests skip), `ruff check` and
+`ruff format`, and
 `mypy --config-file backend/mypy.ini backend` (0 errors; it reported 91 when first run, all fixed).
 
 CI: `.github/workflows/platform-ci.yml` runs those checks on every pull request that touches the
@@ -603,7 +605,10 @@ Safety audit (2026-11-15) and what it changed:
 
 Verified (2026-11-15): 13 migration tests. On SQLite 17 pass (10 tests plus the seven historical
 schemas) and the two lock tests are skipped; on PostgreSQL 16 (TimescaleDB image) all 12 that take
-a database pass. Both lock tests fail when the lock is disabled. In the sandbox
+a database pass. Both lock tests fail when the lock is disabled. Seven real
+databases left from earlier ingestion runs, all created before migrations (81,173 rows; four of
+them missing the columns above), were adopted as copies: a hash of every existing row was
+identical before and after, and none differed from the models afterwards. In the sandbox
 Docker stack: a database created by the previous image was adopted (revision recorded, row counts
 only grew, `downgrade base` refused), and three cold starts of API and worker together on an empty
 database each ran the baseline exactly once with no errors. CI runs the migration tests against a
