@@ -118,7 +118,9 @@ How it was built here, and what that leaves unproven: the development sandbox in
 `pip` inside a build cannot verify PyPI. Rather than alter the Dockerfile, the base image tag
 `python:3.12-slim` was pointed at a local copy of the official image with the sandbox's
 certificate added, and the build used host networking to reach the sandbox proxy. On a normal
-network neither is needed, but that plain build has not been run. Containers in the sandbox have
+network neither is needed: on 2026-11-15 the `docker` job of `platform-ci.yml` built the committed
+Dockerfile on a GitHub runner with no workarounds and ran the tests inside the image (374 passed).
+The full compose stack (database, API, worker together) has still only been started in the sandbox. Containers in the sandbox have
 no route to sec.gov, so the worker's runs there ended as recorded failures, which is the designed
 behaviour; scheduled ingestion against live EDGAR was verified outside the container.
 
@@ -127,10 +129,9 @@ Checks that now gate every change: `pytest` (374 tests), `ruff check` and `ruff 
 
 CI: `.github/workflows/platform-ci.yml` runs those checks on every pull request that touches the
 platform, plus a plain `docker build` of the committed Dockerfile and the test suite inside the
-image. **It has never run**: on 2026-11-15 GitHub reported no workflows and no runs for this
-repository, which is what a fork shows until its owner enables Actions (Actions tab → "I understand
-my workflows, go ahead and enable them"). Until a run is green, the checks above are local only and
-the plain-network Docker build stays unverified; the first green `docker` job is that verification.
+image. First run 2026-11-15 on PR #2: both jobs passed. Upstream's pre-commit hooks also run on
+pull requests; they skip `backend/tests/fixtures/` (real filings must stay byte-for-byte) and leave
+type-checking of `backend/` to the platform's own mypy configuration.
 
 ## 5a. Milestone 4 — insider intelligence (complete, with stated limits)
 

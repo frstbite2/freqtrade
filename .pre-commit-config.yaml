@@ -19,7 +19,8 @@ repos:
     hooks:
       - id: mypy
         language: python
-        exclude: build_helpers
+        # backend/ is type-checked by platform-ci.yml with its own backend/mypy.ini
+        exclude: build_helpers|^backend/
         additional_dependencies:
           - types-cachetools==7.0.0.20260713
           - types-filelock==3.2.7
@@ -44,6 +45,7 @@ repos:
         exclude: |
             (?x)^(
                 tests/.*|
+                backend/tests/fixtures/.*|
                 .*\.svg|
                 .*\.yml|
                 .*\.json
@@ -54,6 +56,7 @@ repos:
       - id: trailing-whitespace
         exclude: |
           (?x)^(
+                backend/tests/fixtures/.*|
                 .*\.md
             )$
 
@@ -66,6 +69,8 @@ repos:
     rev: v2.4.3
     hooks:
     - id: codespell
+      # real SEC filings, stored byte-for-byte
+      exclude: ^backend/tests/fixtures/
       additional_dependencies:
         - tomli
 
