@@ -125,6 +125,13 @@ behaviour; scheduled ingestion against live EDGAR was verified outside the conta
 Checks that now gate every change: `pytest` (374 tests), `ruff check` and `ruff format`, and
 `mypy --config-file backend/mypy.ini backend` (0 errors; it reported 91 when first run, all fixed).
 
+CI: `.github/workflows/platform-ci.yml` runs those checks on every pull request that touches the
+platform, plus a plain `docker build` of the committed Dockerfile and the test suite inside the
+image. **It has never run**: on 2026-11-15 GitHub reported no workflows and no runs for this
+repository, which is what a fork shows until its owner enables Actions (Actions tab → "I understand
+my workflows, go ahead and enable them"). Until a run is green, the checks above are local only and
+the plain-network Docker build stays unverified; the first green `docker` job is that verification.
+
 ## 5a. Milestone 4 — insider intelligence (complete, with stated limits)
 
 ### What exists
