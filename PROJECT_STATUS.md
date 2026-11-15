@@ -582,20 +582,41 @@ Changing the schema: edit the model, then
 `alembic -c backend/alembic.ini revision --autogenerate -m "what changed"`, review the generated
 file, and add a test if it moves data.
 
-Verified (2026-11-15): 8 tests, run on SQLite and on PostgreSQL 16 (TimescaleDB image),
-including (PostgreSQL only) four processes migrating a fresh database at once (fails without the lock, passes with
-it). In the sandbox Docker stack, a database created by the previous image was adopted by the new
-one: revision recorded, row counts only grew, no drift reported, and `downgrade base` refused
-because tables held data. CI runs the migration tests against a PostgreSQL service.
+Safety audit (2026-11-15) and what it changed:
+
+- **Older databases.** The database was rebuilt as each of the seven past commits that changed
+  the models created it, on SQLite and on PostgreSQL, then adopted. Three early versions lacked
+  two columns (`insider_filing.classifier_version`, `insider_issuer.failed_filings`); adoption
+  left those databases unusable. The baseline now adds them. Existing rows get 0: for
+  `classifier_version` that is below every real version, so ingestion re-classifies those filings;
+  for `failed_filings` it stands only until the next ingestion run. All seven now adopt with no
+  difference from the models and no rows lost. The seven schemas are kept as test fixtures.
+- **Failed migration.** On SQLite a migration that failed half way kept its table changes (Python's
+  default SQLite mode commits them immediately). `make_engine` now opens SQLite with transactional
+  DDL, so a failure rolls back everything on both databases. This applies to all SQLite use.
+- **Lock.** Besides four processes starting at once, a process is shown to wait while another
+  holds the lock, to leave the schema untouched meanwhile, and to finish once it is released.
+  PostgreSQL releases the lock itself if the holder dies. There is no time limit on the wait.
+- **Downgrade.** On PostgreSQL the baseline downgrade now locks the tables before checking that
+  they are empty, so nothing can be written between the check and the drop. The migration tests
+  refuse to run against a database that holds rows.
+
+Verified (2026-11-15): 13 migration tests. On SQLite 17 pass (10 tests plus the seven historical
+schemas) and the two lock tests are skipped; on PostgreSQL 16 (TimescaleDB image) all 12 that take
+a database pass. Both lock tests fail when the lock is disabled. In the sandbox
+Docker stack: a database created by the previous image was adopted (revision recorded, row counts
+only grew, `downgrade base` refused), and three cold starts of API and worker together on an empty
+database each ran the baseline exactly once with no errors. CI runs the migration tests against a
+PostgreSQL service.
 
 Not done: offline SQL script generation (`alembic --sql`); TimescaleDB hypertables (no table uses
 them yet).
 
 ## 6. Known shortcuts and deferred items
 
-- Migrations (section 5g): a table that existed before migrations and predates a column added to
-  its model since is reported at start-up, not repaired. No such database is known; if the
-  message appears, write a migration for the missing column.
+- Migrations (section 5g): the baseline repairs the two column gaps that past versions of the
+  platform really had. Any other difference in a pre-migration database (for example a missing
+  index) is reported at start-up, not repaired.
 - Migration downgrades are tested on empty tables only (the baseline refuses to drop data); each
   future migration that changes data needs its own test with rows in place.
 - SQLite stores decimals as floating point (about 15 significant digits); PostgreSQL is exact.

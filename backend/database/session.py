@@ -44,6 +44,10 @@ class UTCDateTime(TypeDecorator):
 def make_engine(url: str) -> Engine:
     if url.startswith("sqlite:///") and url != "sqlite:///:memory:":
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
+    if url.startswith("sqlite"):
+        # Python's default SQLite mode commits table changes on the spot, so a migration that
+        # failed half way could not be rolled back. This makes DDL part of the transaction.
+        return create_engine(url, pool_pre_ping=True, connect_args={"autocommit": False})
     return create_engine(url, pool_pre_ping=True)
 
 

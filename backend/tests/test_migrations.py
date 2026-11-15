@@ -5,9 +5,13 @@ Runs on SQLite always, and also on the database named by MIGRATION_TEST_DATABASE
 """
 
 import os
+import shutil
+import sqlite3
+import time
 from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, date, datetime
 from multiprocessing import get_context
+from pathlib import Path
 
 import pytest
 from alembic import command
@@ -24,6 +28,7 @@ from backend.database.session import (
     schema_drift,
 )
 from backend.models import AuditLog
+from backend.models.insider import InsiderIssuer
 
 
 URLS = ["sqlite"] + [u for u in [os.environ.get("MIGRATION_TEST_DATABASE_URL")] if u]
@@ -35,12 +40,25 @@ def engine(request, tmp_path):
     engine = make_engine(url)
     wipe(engine)
     yield engine
+    empty(engine)
     wipe(engine)
     engine.dispose()
 
 
+def empty(engine):
+    with engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            if inspect(conn).has_table(table.name):
+                conn.execute(table.delete())
+
+
 def wipe(engine):
     with engine.begin() as conn:
+        for table in set(inspect(conn).get_table_names()) & set(Base.metadata.tables):
+            # A database these tests may empty holds no rows between tests. Rows mean the URL
+            # points at something real.
+            if conn.execute(text(f"SELECT 1 FROM {table} LIMIT 1")).first():
+                raise RuntimeError(f"refusing to wipe {engine.url!r}: table {table} holds data")
         Base.metadata.drop_all(conn)
         conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
 
@@ -54,8 +72,8 @@ def version(engine):
         return conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
 
 
-def migrate(engine, direction, target):
-    config = migration_config()
+def migrate(engine, direction, target, config=None):
+    config = config or migration_config()
     with engine.begin() as conn:
         config.attributes["connection"] = conn
         getattr(command, direction)(config, target)
@@ -151,4 +169,122 @@ def test_api_and_worker_starting_together_do_not_collide(engine):
     with ProcessPoolExecutor(4, mp_context=get_context("spawn")) as pool:
         for result in [pool.submit(start, url) for _ in range(4)]:
             result.result()
+    assert tables(engine) == set(Base.metadata.tables)
+
+
+# How each past version of the platform created its database (SQLite DDL, captured by running
+# that commit's own create_all). See fixtures/schemas/README.md.
+PAST_SCHEMAS = sorted((Path(__file__).parent / "fixtures" / "schemas").glob("*.sql"))
+
+
+@pytest.mark.parametrize("schema", PAST_SCHEMAS, ids=lambda p: p.stem)
+def test_database_from_every_past_version_is_adopted(schema, tmp_path, caplog):
+    path = tmp_path / "old.sqlite"
+    with sqlite3.connect(path) as raw:
+        raw.executescript(schema.read_text())
+        raw.execute(
+            "INSERT INTO audit_log (ts, actor, action, detail) "
+            "VALUES ('2026-01-01 00:00:00', 'old', 'row', '{}')"
+        )
+    engine = make_engine(f"sqlite:///{path}")
+    init_db(engine)
+    assert "differs from the models" not in caplog.text
+    assert tables(engine) == set(Base.metadata.tables)
+    with sessionmaker(engine)() as s:
+        assert s.scalars(select(AuditLog)).one().actor == "old"
+    engine.dispose()
+
+
+def test_table_missing_a_newer_column_gets_it_and_keeps_its_rows(engine, caplog):
+    Base.metadata.create_all(engine)
+    with sessionmaker(engine)() as s:
+        s.add(
+            InsiderIssuer(
+                cik=320187,
+                ticker="NKE",
+                name="NIKE",
+                history_since=date(2023, 1, 1),
+                last_ingested_at=datetime(2026, 1, 2, tzinfo=UTC),
+                failed_filings=3,
+            )
+        )
+        s.commit()
+    with engine.begin() as conn:  # the table as the first insider version made it
+        conn.execute(text("ALTER TABLE insider_issuer DROP COLUMN failed_filings"))
+        conn.execute(text("ALTER TABLE insider_filing DROP COLUMN classifier_version"))
+    init_db(engine)
+    assert "differs from the models" not in caplog.text
+    with sessionmaker(engine)() as s:
+        issuer = s.scalars(select(InsiderIssuer)).one()
+        assert (issuer.ticker, issuer.failed_filings) == ("NKE", 0)
+
+
+def test_missing_index_is_reported_and_nothing_is_lost(engine, caplog):
+    Base.metadata.create_all(engine)
+    with sessionmaker(engine)() as s:
+        backend.models.record_audit(s, "old", "row")
+    with engine.begin() as conn:
+        conn.execute(text("DROP INDEX ix_audit_log_action"))
+    init_db(engine)
+    assert "ix_audit_log_action" in caplog.text
+    with sessionmaker(engine)() as s:
+        assert s.scalars(select(AuditLog)).one().actor == "old"
+
+
+BROKEN_REVISION = """
+import sqlalchemy as sa
+from alembic import op
+
+revision = "9999"
+down_revision = "0001"
+
+
+def upgrade():
+    op.create_table("half_done", sa.Column("id", sa.Integer(), primary_key=True))
+    op.add_column("audit_log", sa.Column("half_done", sa.Integer()))
+    op.execute("UPDATE audit_log SET actor = 'overwritten'")
+    raise RuntimeError("migration failed half way")
+
+
+def downgrade():
+    pass
+"""
+
+
+def test_failed_migration_leaves_the_database_exactly_as_it_was(engine, tmp_path):
+    init_db(engine)
+    with sessionmaker(engine)() as s:
+        backend.models.record_audit(s, "test", "kept")
+    scripts = tmp_path / "migrations"
+    shutil.copytree(Path(backend.models.__file__).parent.parent / "migrations", scripts)
+    (scripts / "versions" / "9999_broken.py").write_text(BROKEN_REVISION)
+    config = migration_config()
+    config.set_main_option("script_location", str(scripts))
+
+    with pytest.raises(RuntimeError, match="failed half way"):
+        migrate(engine, "upgrade", "head", config)
+
+    assert version(engine) == "0001"
+    assert "half_done" not in tables(engine)
+    with engine.connect() as conn:
+        assert schema_drift(conn) == []
+    with sessionmaker(engine)() as s:
+        assert s.scalars(select(AuditLog)).one().actor == "test"
+
+
+def test_second_process_waits_for_the_migration_lock_then_finishes(engine):
+    if engine.dialect.name != "postgresql":
+        pytest.skip("the advisory lock exists on PostgreSQL only")
+    url = engine.url.render_as_string(hide_password=False)
+    with (
+        engine.connect() as holder,
+        ProcessPoolExecutor(1, mp_context=get_context("spawn")) as pool,
+    ):
+        holder.execute(text("SELECT pg_advisory_lock(7203145)"))  # another process, mid-migration
+        waiting = pool.submit(start, url)
+        time.sleep(3)
+        assert not waiting.done()
+        assert tables(engine) == set()  # it has not touched the schema while waiting
+        holder.execute(text("SELECT pg_advisory_unlock(7203145)"))
+        waiting.result(timeout=60)
     assert tables(engine) == set(Base.metadata.tables)

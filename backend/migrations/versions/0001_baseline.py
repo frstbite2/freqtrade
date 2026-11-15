@@ -350,9 +350,26 @@ def upgrade() -> None:  # noqa: C901  one independent branch per table
                 batch_op.f("ix_institutional_holding_cusip"), ["cusip"], unique=False
             )
 
+    # Tables made by early versions of the platform lack two columns added later (found by
+    # rebuilding the database as each past commit created it). Existing rows get 0: for
+    # classifier_version that is below every real version, so ingestion re-classifies them; for
+    # failed_filings it stands until the next ingestion run overwrites it.
+    inspector = sa.inspect(op.get_bind())
+    for table, column in (
+        ("insider_filing", "classifier_version"),
+        ("insider_issuer", "failed_filings"),
+    ):
+        if table in existing and column not in {c["name"] for c in inspector.get_columns(table)}:
+            op.add_column(
+                table, sa.Column(column, sa.Integer(), nullable=False, server_default="0")
+            )
+
 
 def downgrade() -> None:
     bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        # Nothing may write between the emptiness check below and the drop.
+        bind.execute(sa.text(f"LOCK TABLE {', '.join(TABLES)} IN ACCESS EXCLUSIVE MODE"))
     holding = [t for t in TABLES if bind.execute(sa.text(f"SELECT 1 FROM {t} LIMIT 1")).first()]
     if holding:
         # Going below the baseline means dropping everything; never do that to stored data.
