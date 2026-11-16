@@ -19,6 +19,7 @@ class JobRun(Base):
     active: Mapped[bool | None]
     started_at: Mapped[datetime] = mapped_column(UTCDateTime, index=True)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
-    status: Mapped[str] = mapped_column(String(12))  # running | succeeded | partial | failed
+    # running | succeeded | partial | failed | interrupted (shut down between targets)
+    status: Mapped[str] = mapped_column(String(12))
     detail: Mapped[dict] = mapped_column(JSON)  # per-target results
     error: Mapped[str | None] = mapped_column(Text)

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.config import get_settings
 from backend.core.logging import setup_logging
-from backend.database.session import init_db, make_engine
+from backend.database.session import commit_new, init_db, make_engine
 from backend.models import record_audit
 from backend.models.beneficial import BeneficialFiling, BeneficialIssuer, BeneficialOwner
 from backend.services.beneficial_ownership.parser import (
@@ -86,9 +86,12 @@ def ingest_issuer(session: Session, client: EdgarClient, ticker: str, since: dat
                     continue
                 report.unstructured += 1
             session.add(_to_model(cik, ref, parsed, filer))
-            session.commit()  # one filing is stored completely or not at all
             stored.add(ref.accession)
-            report.stored += 1
+            # One filing is stored completely or not at all.
+            if commit_new(session, BeneficialFiling, ref.accession):
+                report.stored += 1
+            else:
+                report.already_stored += 1
         except (EdgarError, ScheduleParseError) as exc:
             session.rollback()
             report.failed[ref.accession] = str(exc)

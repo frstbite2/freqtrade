@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.config import get_settings
 from backend.core.logging import setup_logging
-from backend.database.session import init_db, make_engine
+from backend.database.session import commit_new, init_db, make_engine
 from backend.models import record_audit
 from backend.models.institutional import (
     InstitutionalFiling,
@@ -64,8 +64,11 @@ def ingest_manager(session: Session, client: EdgarClient, cik: int, since: date)
             if parsed.form != ref.form:
                 raise Form13FError(f"index says {ref.form}, document says {parsed.form}")
             session.add(_to_model(cik, parsed, ref))
-            session.commit()  # one filing is stored completely or not at all
             stored.add(ref.accession)
+            # One filing is stored completely or not at all.
+            if not commit_new(session, InstitutionalFiling, ref.accession):
+                report.already_stored += 1  # another process stored it meanwhile
+                continue
             report.stored += 1
             if parsed.issues:
                 report.with_issues.append(ref.accession)

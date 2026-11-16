@@ -39,6 +39,9 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-trading}
     command: ["python", "-m", "backend.services.scheduler"]
+    # On stop the worker finishes its current target and records the run as interrupted;
+    # Docker's default 10 s before killing it is usually too short for that.
+    stop_grace_period: 2m
     healthcheck:
       disable: true   # the image's check probes the API port, which the worker does not serve
     volumes:
