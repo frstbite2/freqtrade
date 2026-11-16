@@ -8,12 +8,14 @@ import { RecentTrades } from "@/components/dashboard/recent-trades";
 import { StatGrid } from "@/components/dashboard/stat-grid";
 import { StrategyComparison } from "@/components/dashboard/strategy-comparison";
 import { SectionHeader } from "@/components/ui/section";
+import { WalletCard } from "@/components/wallet/wallet-card";
 
 export default function DashboardPage() {
   return (
     <div className="space-y-6 sm:space-y-8">
       <HeroBalance />
       <StatGrid />
+      <WalletCard />
 
       <section aria-labelledby="bots-heading">
         <SectionHeader title="AI bots" subtitle="Five specialists, each with its own strategy and watchlist" />

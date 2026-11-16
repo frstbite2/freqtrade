@@ -9,6 +9,7 @@ import { Topbar } from "@/components/shell/topbar";
 import { DemoBanner } from "@/components/shell/demo-banner";
 import { BRAND } from "@/lib/brand";
 import { DataModeProvider } from "@/lib/data-mode";
+import { WalletProvider } from "@/lib/wallet/wallet-context";
 
 export const metadata: Metadata = {
   title: { default: `${BRAND.name} · ${BRAND.tagline}`, template: `%s · ${BRAND.name}` },
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <div className="backdrop" aria-hidden />
         <DataModeProvider>
+          <WalletProvider>
           <div className="flex min-h-dvh">
             <Sidebar />
             <div className="flex min-w-0 flex-1 flex-col">
@@ -40,6 +42,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
           <MobileNav />
+          </WalletProvider>
         </DataModeProvider>
       </body>
     </html>

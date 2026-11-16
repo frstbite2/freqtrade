@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Portfolio" };
 export default function PortfolioPage() {
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Paper portfolio" title="Portfolio" subtitle="Simulated balances only. No deposits, withdrawals, transfers or wallet connections exist, by design." />
+      <PageHeader eyebrow="Paper portfolio" title="Portfolio" subtitle="Simulated balances only. No deposits, withdrawals or transfers exist, by design. A connected Phantom wallet appears on the dashboard, read-only, never here." />
       <HeroBalance />
       <PortfolioPanel />
       <RecentTrades />

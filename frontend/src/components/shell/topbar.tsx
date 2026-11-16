@@ -7,6 +7,7 @@ import { BackendStatus } from "./backend-status";
 import { DataModeToggle } from "./data-mode-toggle";
 import { LogoMark } from "./logo";
 import { NotificationCenter } from "./notification-center";
+import { ConnectWallet } from "@/components/wallet/connect-button";
 
 export function Topbar() {
   const router = useRouter();
@@ -39,6 +40,7 @@ export function Topbar() {
           <BackendStatus />
           <DataModeToggle />
           <NotificationCenter />
+          <ConnectWallet />
         </div>
       </div>
     </header>

@@ -6,6 +6,7 @@ import { DataModeToggle } from "@/components/shell/data-mode-toggle";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeader } from "@/components/ui/section";
 import { useDataMode } from "@/lib/data-mode";
+import { WalletPermissions } from "@/components/wallet/wallet-permissions";
 
 export function SettingsView() {
   const { mode } = useDataMode();
@@ -28,13 +29,14 @@ export function SettingsView() {
               The API token lives only in the frontend server's environment. The browser talks to this app, never to the backend directly.
             </Note>
             <Note icon={<Lock className="size-4 text-mint" aria-hidden />} title="Paper trading only">
-              No deposits, withdrawals, transfers or wallet connections exist. Live trading is a validation error in the backend.
+              No deposits, withdrawals or transfers exist. Live trading is a validation error in the backend.
             </Note>
             <Note icon={<MonitorSmartphone className="size-4 text-sky" aria-hidden />} title="Private by default">
               Meant for localhost or a trusted network. Search engines are told not to index it.
             </Note>
           </ul>
         </section>
+        <WalletPermissions />
       </div>
     </div>
   );

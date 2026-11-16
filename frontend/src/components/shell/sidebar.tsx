@@ -42,7 +42,7 @@ export function PaperOnlyCard() {
         Paper trading only
       </div>
       <p className="mt-1.5 text-xs leading-relaxed text-ink-3">
-        Simulated balances. No real orders, deposits, withdrawals or wallet connections.
+        Simulated balances. No real orders, deposits or withdrawals. A connected Phantom wallet is view-only.
       </p>
     </div>
   );

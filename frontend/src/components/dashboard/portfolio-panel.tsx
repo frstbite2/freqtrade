@@ -19,7 +19,7 @@ export function PortfolioPanel() {
         <SectionHeader title="Portfolio" subtitle="Simulated holdings and allocation" />
         <EmptyState icon={<Wallet className="size-5 text-gold" aria-hidden />} title="No simulated holdings yet">
           Holdings appear when the paper broker (Milestone 7) places simulated trades. Only simulated
-          balances will ever be shown: no deposits, withdrawals or wallet connections.
+          balances will ever be shown: no deposits or withdrawals. A connected Phantom wallet is shown separately, read-only.
         </EmptyState>
       </section>
     );
