@@ -80,6 +80,14 @@ def edgar_handler(request: httpx.Request) -> httpx.Response:
     return httpx.Response(404)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_from_the_environment(monkeypatch):
+    """Tests never take settings from the shell or container they run in (a production
+    container sets APP_ENV and a real DATABASE_URL); each test sets what it needs."""
+    for var in ("APP_ENV", "DATABASE_URL", "CONFIG_DIR"):
+        monkeypatch.delenv(var, raising=False)
+
+
 @pytest.fixture
 def edgar_client(tmp_path):
     client = EdgarClient(
