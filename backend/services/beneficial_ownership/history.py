@@ -60,8 +60,12 @@ def holder_key(filing: BeneficialFiling) -> str:
     return "".join(ch for ch in name.upper() if ch.isalnum() or ch == " ").strip()
 
 
-def describe(filings: list[BeneficialFiling]) -> list[dict]:
-    """Every filing with its change from the same holder's previous structured filing."""
+def describe(filings: list[BeneficialFiling], schedule: str | None = None) -> list[dict]:
+    """Every filing with its change from the same holder's previous structured filing.
+
+    `schedule` keeps only that schedule's filings, but changes are still measured against the
+    holder's previous filing of either schedule, so a switch from 13G to 13D stays visible.
+    """
     previous: dict[str, BeneficialFiling] = {}
     out = []
     for f in filings:
@@ -106,7 +110,8 @@ def describe(filings: list[BeneficialFiling]) -> list[dict]:
             if key in previous:
                 row["change"] = _change(previous[key], f)
             previous[key] = f
-        out.append(row)
+        if schedule is None or f.schedule == schedule:
+            out.append(row)
     return out
 
 
@@ -149,10 +154,12 @@ def _change(before: BeneficialFiling, after: BeneficialFiling) -> dict:
     }
 
 
-def holders(filings: list[BeneficialFiling]) -> list[dict]:
+def holders(filings: list[BeneficialFiling], schedule: str | None = None) -> list[dict]:
     """Each holder's latest filing, largest disclosed stake first.
 
     A holder known only from free-form filings is listed with unknown figures rather than left out.
+    `schedule` keeps holders whose latest filing is of that schedule: a 13G holder that has since
+    filed a 13D is active, and never appears among the passive holders.
     """
     latest: dict[str, dict] = {}
     for row in describe(filings):
@@ -161,6 +168,6 @@ def holders(filings: list[BeneficialFiling]) -> list[dict]:
         if current is None or row["structured"] or not current["structured"]:
             latest[row["holder_key"]] = row
     return sorted(
-        latest.values(),
+        (r for r in latest.values() if schedule is None or r["schedule"] == schedule),
         key=lambda r: (r["percent"] is None, -Decimal(r["percent"] or 0), r["holder"] or ""),
     )

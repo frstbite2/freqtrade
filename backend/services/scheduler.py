@@ -77,7 +77,8 @@ def next_due(session: Session, settings: Settings, job: str) -> datetime | None:
     if last is None:
         return None
     schedule = settings.app.ingestion
-    wait = schedule.retry_after_minutes if last.status == "failed" else job_table(settings)[job][0]
+    retry = last.status in ("failed", "interrupted")
+    wait = schedule.retry_after_minutes if retry else job_table(settings)[job][0]
     return last.started_at + timedelta(minutes=wait)
 
 
@@ -109,8 +110,13 @@ def run_job(
     job: str,
     client_factory: Callable[[], EdgarClient],
     now: datetime | None = None,
+    stop: threading.Event | None = None,
 ) -> JobRun | None:
-    """Run one job for all its targets. Returns the finished run, or None if already running."""
+    """Run one job for all its targets. Returns the finished run, or None if already running.
+
+    When `stop` is set (the worker was asked to shut down), the run ends after the current target
+    and is recorded as interrupted, so it is retried soon instead of looking abandoned.
+    """
     _, targets, ingest = job_table(settings)[job]
     run = _acquire(session, settings, job, now or datetime.now(UTC))
     if run is None:
@@ -118,17 +124,26 @@ def run_job(
         return None
     results: dict[str, dict] = {}
     error = None
+    skipped: list[str] = []
     try:
         client = client_factory()
         try:
-            for target in targets:
+            for i, target in enumerate(targets):
+                if stop is not None and stop.is_set():
+                    skipped = [str(t) for t in targets[i:]]
+                    break
+                # One bad target must not stop the rest, whatever goes wrong with it.
                 try:
                     report = ingest(session, client, target)
                     results[str(target)] = _summary(report)
-                except (EdgarError, ValueError) as exc:  # one bad target must not stop the rest
+                except (EdgarError, ValueError) as exc:  # expected: SEC, network, bad data
                     session.rollback()
                     results[str(target)] = {"error": str(exc)}
                     logger.warning("job %s: %s failed: %s", job, target, exc)
+                except Exception as exc:  # unexpected: a bug; keep the traceback in the log
+                    session.rollback()
+                    results[str(target)] = {"error": f"{type(exc).__name__}: {exc}"}
+                    logger.exception("job %s: %s failed unexpectedly", job, target)
         finally:
             client.close()
     except Exception as exc:
@@ -137,8 +152,15 @@ def run_job(
         logger.exception("job %s failed", job)
 
     problems = [t for t, r in results.items() if r.get("error") or r.get("failed")]
-    all_failed = bool(targets) and all("error" in r for r in results.values())
-    status = "failed" if error or all_failed else "partial" if problems else "succeeded"
+    all_failed = bool(results) and all("error" in r for r in results.values())
+    if error:
+        status = "failed"
+    elif skipped:
+        status, error = "interrupted", f"interrupted by shutdown before: {', '.join(skipped)}"
+    elif all_failed:
+        status = "failed"
+    else:
+        status = "partial" if problems else "succeeded"
     if error is None and problems:
         error = f"problems with: {', '.join(problems)}"
     run = need(session.get(JobRun, run.id), "job run")
@@ -171,6 +193,7 @@ def run_due(
     client_factory: Callable[[], EdgarClient],
     force: str | None = None,
     now: datetime | None = None,
+    stop: threading.Event | None = None,
 ) -> list[JobRun]:
     """Run every job that is due (or the forced one). Does nothing when ingestion is disabled."""
     if not settings.app.ingestion.enabled and not force:
@@ -178,12 +201,35 @@ def run_due(
     now = now or datetime.now(UTC)
     runs = []
     for job in job_table(settings):
+        if stop is not None and stop.is_set():
+            break
         due = next_due(session, settings, job)
         if job == force or (force is None and (due is None or due <= now)):
-            run = run_job(session, settings, job, client_factory, now)
+            run = run_job(session, settings, job, client_factory, now, stop)
             if run is not None:
                 runs.append(run)
     return runs
+
+
+def serve(
+    sessions: sessionmaker,
+    settings: Settings,
+    client_factory: Callable[[], EdgarClient],
+    stop: threading.Event,
+    once: bool = False,
+    force: str | None = None,
+) -> None:
+    """Run due jobs every `poll_seconds` until `stop` is set. A failing pass (the database
+    restarting, say) is logged and retried at the next poll instead of ending the worker."""
+    while not stop.is_set():
+        try:
+            with sessions() as session:
+                run_due(session, settings, client_factory, force, stop=stop)
+        except Exception:
+            logger.exception("scheduler pass failed; retrying at the next poll")
+        if once:
+            break
+        stop.wait(settings.app.ingestion.poll_seconds)
 
 
 def main() -> None:
@@ -203,15 +249,10 @@ def main() -> None:
 
     stop = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
-        signal.signal(sig, lambda *_: stop.set())  # finish the current job, then exit
+        signal.signal(sig, lambda *_: stop.set())  # finish the current target, then exit
     if not settings.app.ingestion.enabled and not opts.force:
         logger.warning("ingestion is disabled in settings; nothing will run")
-    while not stop.is_set():
-        with sessions() as session:
-            run_due(session, settings, client, opts.force)
-        if opts.once:
-            break
-        stop.wait(settings.app.ingestion.poll_seconds)
+    serve(sessions, settings, client, stop, opts.once, opts.force)
     engine.dispose()
     logger.info("scheduler stopped")
 

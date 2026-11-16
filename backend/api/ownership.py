@@ -24,7 +24,7 @@ AsOf = Annotated[datetime | None, Query(description="Point in time (ISO 8601 wit
 Schedule = Annotated[Literal["13D", "13G"] | None, Query(description="Only this schedule.")]
 
 
-def _load(session: Session, ticker: str, as_of: datetime | None, schedule: str | None):
+def _load(session: Session, ticker: str, as_of: datetime | None):
     issuer = session.scalar(
         select(BeneficialIssuer).where(BeneficialIssuer.ticker == ticker.upper())
     )
@@ -39,8 +39,6 @@ def _load(session: Session, ticker: str, as_of: datetime | None, schedule: str |
     elif as_of.tzinfo is None:
         raise HTTPException(422, "as_of must include a UTC offset, e.g. 2026-01-31T00:00:00Z")
     filings = filings_as_of(session, issuer.cik, as_of.astimezone(UTC))
-    if schedule:
-        filings = [f for f in filings if f.schedule == schedule]
     meta = {
         "ticker": issuer.ticker,
         "cik": issuer.cik,
@@ -57,10 +55,12 @@ def _load(session: Session, ticker: str, as_of: datetime | None, schedule: str |
 def holders_endpoint(
     request: Request, ticker: Ticker, as_of: AsOf = None, schedule: Schedule = None
 ) -> dict:
-    """Each filer's most recent disclosure of a stake above 5%, with the change it reported."""
+    """Each filer's most recent disclosure of a stake above 5%, with the change it reported.
+
+    With `schedule`, only holders whose latest filing is of that schedule."""
     with request.app.state.sessions() as session:
-        filings, meta = _load(session, ticker, as_of, schedule)
-        return meta | {"holders": holders(filings)}
+        filings, meta = _load(session, ticker, as_of)
+        return meta | {"holders": holders(filings, schedule)}
 
 
 @router.get("/{ticker}/filings")
@@ -73,6 +73,6 @@ def filings_endpoint(
 ) -> dict:
     """The full history of 13D/13G filings, newest first."""
     with request.app.state.sessions() as session:
-        filings, meta = _load(session, ticker, as_of, schedule)
-        rows = describe(filings)[::-1]
+        filings, meta = _load(session, ticker, as_of)
+        rows = describe(filings, schedule)[::-1]
         return meta | {"total": len(rows), "filings": rows[:limit]}

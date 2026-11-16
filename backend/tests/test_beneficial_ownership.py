@@ -390,3 +390,31 @@ def test_api_says_unavailable_rather_than_nobody(api):
 )
 def test_api_validates_input(api, path, params):
     assert api.get(path, params=params, headers=AUTH).status_code == 422
+
+
+def test_schedule_filter_never_shows_an_active_holder_as_passive():
+    """Synthetic rows. A 13G holder that later files a 13D is active now: filtering by schedule
+    must use each holder's latest filing, and the switch must stay visible in the history."""
+    from backend.models.beneficial import BeneficialOwner
+
+    def filing(accession, schedule, name, percent, day):
+        return BeneficialFiling(
+            accession=accession, form=f"SCHEDULE {schedule}", schedule=schedule,
+            is_amendment=False, structured=True, filer_cik=1, filer_name=name,
+            filed_date=date(2026, 1, day), accepted_at=at(f"2026-01-{day:02d}T21:00:00"),
+            issues=[], url="",
+            persons=[BeneficialOwner(
+                row_index=0, name=name, shares=D(percent), percent=D(percent), issues=[]
+            )],
+        )  # fmt: skip
+
+    filings = [
+        filing("a", "13G", "Turned Active LP", "6.0", 5),
+        filing("b", "13G", "Passive Fund", "5.5", 6),
+        filing("c", "13D", "Turned Active LP", "7.0", 10),
+    ]
+    assert [h["holder"] for h in holders(filings, schedule="13G")] == ["Passive Fund"]
+    assert [h["holder"] for h in holders(filings, schedule="13D")] == ["Turned Active LP"]
+    active = describe(filings, schedule="13D")
+    assert [r["accession"] for r in active] == ["c"]
+    assert active[0]["change"]["notes"] == ["switched from Schedule 13G to Schedule 13D"]

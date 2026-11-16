@@ -10,7 +10,8 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import Connection, DateTime, Engine, create_engine, text
 from sqlalchemy.engine import Dialect
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.types import TypeDecorator
 
 
@@ -76,6 +77,19 @@ def schema_drift(connection: Connection) -> list:
     """Differences between the database and the models; empty when they agree."""
     context = MigrationContext.configure(connection, opts={"compare_type": True})
     return compare_metadata(context, Base.metadata)
+
+
+def commit_new(session: Session, model: type[Base], key: object) -> bool:
+    """Commit a newly added record. False if another process stored the same record first (a
+    worker and a manual ingest running together); any other constraint failure is raised."""
+    try:
+        session.commit()
+        return True
+    except IntegrityError:
+        session.rollback()
+        if session.get(model, key) is None:
+            raise
+        return False
 
 
 def db_ok(engine: Engine) -> bool:

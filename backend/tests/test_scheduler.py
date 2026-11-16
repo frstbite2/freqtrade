@@ -3,12 +3,14 @@
 Ingestion itself runs on the real SEC fixtures; schedules and clocks are set by the tests.
 """
 
+import threading
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from backend.core.config import load_settings
@@ -218,3 +220,105 @@ def test_api_reports_runs_failures_and_what_is_due(tmp_path, monkeypatch, factor
         )
         assert client.get("/api/v1/jobs").status_code == 401
         assert client.get("/api/v1/jobs", params={"history": 999}, headers=auth).status_code == 422
+
+
+# --- running continuously (review of PR #2) ---
+
+
+class OtherProcessFirst:
+    """A real client whose first document fetch first lets another process store everything,
+    as when a manual ingest or a second worker runs at the same time as this one."""
+
+    DOCUMENTS = ("primary_xml", "ownership_xml", "submission_text", "filing_header")
+
+    def __init__(self, client, before):
+        self._client, self._before = client, before
+
+    def __getattr__(self, name):
+        if name in self.DOCUMENTS and self._before:
+            before, self._before = self._before, None
+            before()
+        return getattr(self._client, name)
+
+
+@pytest.mark.parametrize(
+    ("job", "model"),
+    [
+        ("insider", InsiderFiling),
+        ("beneficial", BeneficialFiling),
+        ("institutional", InstitutionalFiling),
+    ],
+)
+def test_filings_stored_meanwhile_by_another_process_are_not_an_error(
+    db_session, settings, factory, job, model
+):
+    _, targets, ingest = scheduler.job_table(settings)[job]
+
+    def other_process():
+        with sessionmaker(db_session.get_bind())() as other:
+            client = factory()()
+            for target in targets:
+                ingest(other, client, target)
+            client.close()
+
+    run = scheduler.run_job(
+        db_session, settings, job, lambda: OtherProcessFirst(factory()(), other_process), NOW
+    )
+    assert (run.status, run.error) == ("succeeded", None)
+    assert not any(r.get("reclassified") for r in run.detail.values())  # nothing was replaced
+    alone = scheduler.run_job(db_session, settings, job, factory(), NOW + timedelta(days=2))
+    assert alone.status == "succeeded"
+    assert all(r["stored"] == 0 for r in alone.detail.values())  # nothing was missed
+    assert count(db_session, model) > 0
+
+
+def test_an_unexpected_error_in_one_target_does_not_stop_the_others(
+    db_session, settings, factory, monkeypatch
+):
+    real = scheduler.insider.ingest_issuer
+
+    def broken_for_gme(session, client, ticker, since):
+        if ticker == "GME":
+            raise KeyError("reportingOwner")  # a parser bug on one odd filing
+        return real(session, client, ticker, since)
+
+    monkeypatch.setattr(scheduler.insider, "ingest_issuer", broken_for_gme)
+    run = scheduler.run_job(db_session, settings, "insider", factory(), NOW)
+    assert (run.status, run.active) == ("partial", None)
+    assert run.detail["GME"]["error"] == "KeyError: 'reportingOwner'"
+    assert run.detail["NKE"]["stored"] > 0
+
+
+def test_shutdown_closes_the_run_between_targets_and_it_is_retried_soon(
+    db_session, settings, factory, monkeypatch
+):
+    stop = threading.Event()
+    real = scheduler.beneficial.ingest_issuer
+
+    def then_shutdown(*args):
+        report = real(*args)
+        stop.set()  # SIGTERM arrives while the first target is being ingested
+        return report
+
+    monkeypatch.setattr(scheduler.beneficial, "ingest_issuer", then_shutdown)
+    run = scheduler.run_job(db_session, settings, "beneficial", factory(), NOW, stop=stop)
+    assert (run.status, run.active, set(run.detail)) == ("interrupted", None, {"GME"})
+    assert run.error == "interrupted by shutdown before: NKE"
+    # Not left "running" (that would block the job until the stale limit); retried soon.
+    assert scheduler.next_due(db_session, settings, "beneficial") == NOW + timedelta(minutes=15)
+
+
+def test_worker_loop_survives_a_failing_pass(db_session, tmp_path, factory, monkeypatch):
+    settings = settings_with(tmp_path, "watchlist: [GME]\ningestion:\n  poll_seconds: 1\n")
+    stop, passes = threading.Event(), []
+
+    def flaky(session, settings, client_factory, force=None, stop=None):
+        passes.append(1)
+        if len(passes) == 1:
+            raise OperationalError("SELECT 1", {}, Exception("database restarting"))
+        stop.set()
+        return []
+
+    monkeypatch.setattr(scheduler, "run_due", flaky)
+    scheduler.serve(sessionmaker(db_session.get_bind()), settings, factory(), stop)
+    assert len(passes) == 2  # the first pass failed; the worker carried on

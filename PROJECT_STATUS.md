@@ -557,14 +557,40 @@ the `watchlist`, every six hours), `institutional` (13F for `tracked_managers`, 
 | Duplicate protection | A unique constraint lets the database hold only one running row per job, so two workers cannot run the same job. A run left "running" past `stale_after_minutes` is closed as abandoned and taken over |
 | Retries | Each request retries with backoff; a failed job is tried again after `retry_after_minutes`; filings that failed are retried on the next run |
 | Failure reporting | Every run is stored in `job_run` with per-target results and an error summary, written to the audit log, logged, and served by `GET /api/v1/jobs` with what is due next |
-| One bad target | Does not stop the others; the run is recorded as `partial` |
-| Graceful stop | On SIGTERM the worker finishes the current job and exits |
+| One bad target | Does not stop the others, whatever the error (an unexpected one is logged with its traceback); the run is recorded as `partial` |
+| Another process storing the same filings | A manual ingest or second worker storing a filing first is counted as already stored, not as an error (any other constraint failure is still raised) |
+| Graceful stop | On SIGTERM the worker finishes the current target, records the run as `interrupted` with the targets it did not reach, and exits; an interrupted run is retried after `retry_after_minutes`. The compose file gives the worker 2 minutes to stop |
+| Database or other failure in a pass | Logged; the worker tries again at the next poll instead of exiting |
 
-Verified: 11 tests (clock-controlled, on the real SEC fixtures) and a live run against EDGAR for
+Verified: 15 tests, 17 cases (clock-controlled, on the real SEC fixtures) and a live run against EDGAR for
 5 watchlist tickers and 14 managers (all three jobs succeeded; an immediate second pass ran
 nothing).
 
-Not done: alerts when a run fails (it is recorded and visible, but nobody is notified).
+Review of 2026-11-16 (continuous running). Each defect below was first reproduced by a test that
+failed on the unfixed code:
+
+- A filing stored by another process between listing and storing (a manual ingest during a
+  worker run) raised a uniqueness error that failed the whole 13D/13G or 13F job. Insider
+  ingestion avoided the error only by deleting and re-inserting the other process's row, counted
+  as a re-classification. All three now count it as already stored.
+- An unexpected error on one target (anything but an SEC or data error) failed the whole job and
+  skipped every later target, on every run.
+- Stopping the worker left its run marked "running", so the job did not run again until the
+  stale limit (3 hours by default). Docker's default 10-second stop also killed it mid-target.
+- Any exception in a scheduler pass (for example the database restarting) ended the worker.
+- In the 13D/13G API, `schedule=13G` was applied before working out each holder's latest filing,
+  so a holder that had moved from 13G to 13D was still listed as a passive 13G holder.
+
+Not done, and limits:
+- No alerts when a run fails (it is recorded and visible, but nobody is notified).
+- A run is considered abandoned only by age: a genuine run longer than `stale_after_minutes`
+  (3 hours) would be taken over by another worker. Real runs took seconds with a warm cache;
+  first runs on a cold cache are longer but were not timed. A heartbeat column would remove the
+  limit; it is a schema change, left for after migrations land.
+- SEC request spacing (8 per second) is per process. A manual ingest during a worker run can
+  together exceed SEC's guideline of 10 per second and get the address blocked for a while.
+- `job_run` and `audit_log` grow without limit (about 30 runs and 200 audit rows a day with the
+  default watchlist); there is no retention policy yet.
 
 ## 5g. Database migrations (complete)
 
