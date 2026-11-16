@@ -307,6 +307,16 @@ def test_shutdown_closes_the_run_between_targets_and_it_is_retried_soon(
     # Not left "running" (that would block the job until the stale limit); retried soon.
     assert scheduler.next_due(db_session, settings, "beneficial") == NOW + timedelta(minutes=15)
 
+    # The restarted worker picks it up at that time and finishes every target.
+    monkeypatch.setattr(scheduler.beneficial, "ingest_issuer", real)
+    early = scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(minutes=14))
+    assert "beneficial" not in [r.job for r in early]  # the other jobs had never run: due
+    (retry,) = scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(minutes=16))
+    assert (retry.job, retry.status, retry.error) == ("beneficial", "succeeded", None)
+    assert retry.detail["GME"] == {"listed": 5, "stored": 0, "already_stored": 5, "failed": {}}
+    assert retry.detail["NKE"]["stored"] == 9
+    assert db_session.scalar(select(func.count()).where(JobRun.active.is_(True))) == 0
+
 
 def test_worker_loop_survives_a_failing_pass(db_session, tmp_path, factory, monkeypatch):
     settings = settings_with(tmp_path, "watchlist: [GME]\ningestion:\n  poll_seconds: 1\n")
