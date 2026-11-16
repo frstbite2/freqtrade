@@ -761,4 +761,3 @@ Operations and security
   production image without them would be smaller.
 - SQLite is for development: its writes are serialised and wait at most 5 seconds for a lock.
   Deployment uses PostgreSQL.
-
