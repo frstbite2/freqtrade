@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.config import get_settings
 from backend.core.logging import setup_logging
+from backend.database.locks import add_wait_option, sec_ingestion
 from backend.database.session import commit_new, init_db, make_engine
 from backend.models import record_audit
 from backend.models.insider import InsiderFiling, InsiderIssuer, InsiderTransaction
@@ -193,6 +194,7 @@ def main() -> None:
         default=datetime.now(UTC).date() - timedelta(days=DEFAULT_HISTORY_DAYS),
         help="ingest filings filed on or after this date (default: three years ago)",
     )
+    add_wait_option(args)
     opts = args.parse_args()
     settings = get_settings()
     setup_logging(settings.app.log_level, json_format=False)
@@ -201,7 +203,7 @@ def main() -> None:
     init_db(engine)
     client = EdgarClient(settings.app.sec_user_agent, settings.app.edgar_cache_dir)
     try:
-        with sessionmaker(engine)() as session:
+        with sec_ingestion(engine, wait=not opts.no_wait), sessionmaker(engine)() as session:
             for ticker in opts.tickers:
                 r = ingest_issuer(session, client, ticker, opts.since)
                 print(

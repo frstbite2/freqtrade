@@ -32,6 +32,7 @@ cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live -k edgar
 # Large holders (13D/13G) and the scheduler for all SEC ingestion
 .venv/bin/python -m backend.services.beneficial_ownership.ingest GME --since 2024-12-01
 .venv/bin/python -m backend.services.scheduler --once        # run whatever is due; omit --once to loop
+# Every SEC command waits while another process ingests; add --no-wait to exit instead.
 
 # Schema changes: edit the model, generate a migration, review it. The app upgrades itself on start.
 .venv/bin/alembic -c backend/alembic.ini revision --autogenerate -m "what changed"
@@ -76,5 +77,10 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
 - Every model change ships with an Alembic migration that has a working downgrade
   (`test_migrations.py` fails otherwise). Never edit a migration that has been merged; add a new
   one. A migration must not drop or rewrite stored data without the user's explicit approval.
+- Every process that contacts SEC holds the SEC ingestion lock (`backend/database/locks.py`);
+  `EdgarClient` refuses real requests without it. A new SEC command uses `sec_ingestion` and
+  `add_wait_option`. Never add a second lock or a way around it.
+- Retention may delete only old `job_run` rows (`scheduler.prune_run_history`). Never delete
+  audit records or any filing, holding, transaction or price data automatically.
 - Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
   withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

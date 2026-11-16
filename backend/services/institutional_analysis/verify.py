@@ -20,6 +20,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from backend.core.config import get_settings
+from backend.database.locks import add_wait_option, sec_ingestion
+from backend.database.session import make_engine
 from backend.services.edgar import EdgarClient, EdgarError
 from backend.services.institutional_analysis.parser import Form13FError, Parsed13F, parse_13f
 
@@ -97,7 +99,14 @@ def main() -> None:
     args.add_argument("dataset_zip")
     args.add_argument("--sample", type=int, default=150)
     args.add_argument("--seed", type=int, default=1)
+    add_wait_option(args)
     opts = args.parse_args()
+    # Verification downloads filings from SEC too, so it takes the same lock as ingestion.
+    with sec_ingestion(make_engine(get_settings().app.database_url), wait=not opts.no_wait):
+        _verify(opts)
+
+
+def _verify(opts: argparse.Namespace) -> None:
     settings = get_settings()
     client = EdgarClient(settings.app.sec_user_agent, settings.app.edgar_cache_dir)
 
