@@ -35,6 +35,9 @@ PR #3, stacked on #2. Neither PR is merged; both wait for the owner's review. Pa
 
 No API keys are configured. SEC EDGAR needs only `SEC_USER_AGENT` (a name and contact email).
 
+Passing tests do not make the platform production-ready: section 7 lists what still has to change
+before it runs unattended.
+
 Milestone 4 (insider filings) was done before Milestone 2 (market data) at the owner's request,
 because SEC EDGAR needs no API key and could be verified against real data immediately.
 
@@ -712,3 +715,50 @@ them yet).
   spelled names count as different holders (section 5e).
 - Scheduler limits (section 5f): no alerts on failed runs; a run is judged abandoned by age only;
   SEC request spacing is per process; `job_run` and `audit_log` have no retention policy.
+
+## 7. Before production
+
+Everything here is known and documented, and none of it is hidden by the tests passing. Items
+marked *(decision)* change the architecture or add a service, so they wait for the owner.
+
+Reliability of the worker
+- **Job lock judged by age.** A worker killed without warning (out of memory, host restart,
+  `kill -9`) leaves its run marked running, and that job does not run again until
+  `stale_after_minutes` (3 hours) has passed; the other jobs are not affected. Conversely, a
+  genuine run longer than 3 hours could be taken over by a second worker. Ingestion is
+  idempotent, so an overlap would not corrupt data, but it doubles the load on SEC. Fix: a lock
+  that the database releases when the connection dies (a PostgreSQL advisory lock) or a heartbeat
+  column. *(decision)*
+- **No alerting.** Failed, partial and interrupted runs are stored, logged and shown by
+  `GET /api/v1/jobs`, but nobody is notified. *(decision: which channel)*
+- **SEC request rate is limited per process** (8 per second). Two processes ingesting at once can
+  exceed SEC's 10 per second guideline and have the address blocked for a while. Fix: a shared
+  limiter, or a rule that manual ingestion is not run while the worker runs.
+- **First runs on an empty cache were never timed.** Warm-cache runs take seconds; the stale limit
+  must stay above the longest real run.
+- **No retention** for `job_run` and `audit_log` (about 30 and 200 rows a day by default).
+
+Verification still missing
+- Full Docker stack (database, API, worker) on a normal network with access to sec.gov: only run
+  in the development sandbox. The image itself is built and tested in CI.
+- PostgreSQL adoption of a real, populated pre-migration database: none existed; checked on
+  rebuilt schemas and a small database.
+- Alpaca market data (M2) against the real API, and technical analysis (M3) on real prices: need
+  Alpaca paper keys.
+- The 13D/13G parser was checked against a second extraction of the same filings, not against an
+  SEC data set (SEC publishes none).
+
+Data limits that stay true in production
+- 13D/13G holders are linked across filings by name; spelling variants split a holder in two.
+- 13D/13G filings before December 2024 have no figures; 13F and 13D/13G are delayed disclosures,
+  never current holdings.
+
+Operations and security
+- No database backups (planned with M10).
+- One shared API bearer token and an in-process rate limit: do not expose the API beyond a trusted
+  network until accounts and a shared limiter exist (M9).
+- The runtime image also contains the test and type-check tools (`pytest`, `mypy`); a separate
+  production image without them would be smaller.
+- SQLite is for development: its writes are serialised and wait at most 5 seconds for a lock.
+  Deployment uses PostgreSQL.
+
