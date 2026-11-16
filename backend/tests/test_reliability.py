@@ -629,7 +629,10 @@ def test_credentials_never_reach_api_responses(tmp_path, monkeypatch):
 
 
 def test_compose_keeps_the_api_on_localhost_and_the_database_private():
-    compose = yaml.safe_load((REPO_ROOT / "docker-compose.platform.yml").read_text())
+    path = REPO_ROOT / "docker-compose.platform.yml"
+    if not path.exists():
+        pytest.skip("the compose file is not in the Docker image; this runs in the repository")
+    compose = yaml.safe_load(path.read_text())
     services = compose["services"]
     assert services["api"]["ports"] == ["127.0.0.1:8000:8000"]
     assert "ports" not in services["db"] and "ports" not in services["worker"]
