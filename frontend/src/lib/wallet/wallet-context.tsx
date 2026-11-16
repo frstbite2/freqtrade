@@ -122,7 +122,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (status !== "connected" || !address) return;
     let cancelled = false;
-    setBalances((b) => (b.state === "ok" ? b : { state: "loading" }));
+    // Keep showing the last snapshot only while refreshing the same address, never another account's.
+    setBalances((b) => (b.state === "ok" && b.snapshot.address === address ? b : { state: "loading" }));
     fetch(`/api/wallet/${address}`, { cache: "no-store" })
       .then(async (r) => {
         const body = await r.json().catch(() => ({}));
@@ -156,6 +157,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     remember(false);
     try {
       await provider.current?.disconnect();
+    } catch {
+      // Phantom failed to disconnect: this app forgets the wallet anyway.
     } finally {
       setAddress(null);
       setStatus("disconnected");
