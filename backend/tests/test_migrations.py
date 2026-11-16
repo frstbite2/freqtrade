@@ -75,9 +75,11 @@ def version(engine):
 
 def migrate(engine, direction, target, config=None):
     config = config or migration_config()
-    with engine.begin() as conn:
+    migrator = make_engine(engine.url.render_as_string(hide_password=False), for_migrations=True)
+    with migrator.begin() as conn:
         config.attributes["connection"] = conn
         getattr(command, direction)(config, target)
+    migrator.dispose()
 
 
 def head():
@@ -284,7 +286,10 @@ def downgrade():
 """
 
 
-def test_failed_migration_leaves_the_database_exactly_as_it_was(engine, tmp_path):
+@pytest.mark.parametrize("path", ["start-up", "alembic command"])
+def test_failed_migration_leaves_the_database_exactly_as_it_was(
+    engine, tmp_path, path, monkeypatch
+):
     init_db(engine)
     with sessionmaker(engine)() as s:
         backend.models.record_audit(s, "test", "kept")
@@ -295,7 +300,11 @@ def test_failed_migration_leaves_the_database_exactly_as_it_was(engine, tmp_path
     config.set_main_option("script_location", str(scripts))
 
     with pytest.raises(RuntimeError, match="failed half way"):
-        migrate(engine, "upgrade", "head", config)
+        if path == "start-up":  # what the API, worker and ingest commands run
+            monkeypatch.setattr("backend.database.session.migration_config", lambda: config)
+            init_db(engine)
+        else:
+            migrate(engine, "upgrade", "head", config)
 
     assert version(engine) == "0001"
     assert "half_done" not in tables(engine)

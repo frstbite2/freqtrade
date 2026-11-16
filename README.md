@@ -2,11 +2,12 @@
 
 This fork adds a standalone, paper-trading-only AI trading research platform in `backend/`,
 next to the upstream freqtrade crypto bot (documented below, unchanged). Status, architecture,
-roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: foundation
-SEC insider filings, 13F institutional holdings and 13D/13G large-holder filings (all verified
-on real filings), and scheduled ingestion for them. A market-data adapter for Alpaca and the
-technical-analysis engine are built, but neither has run on real prices yet (needs Alpaca API
-keys).** There is no trading yet.
+roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: the
+foundation, SEC insider filings, 13F institutional holdings and 13D/13G large-holder filings (all
+verified on real filings), scheduled ingestion for them, and database migrations. A market-data
+adapter for Alpaca and the technical-analysis engine are built, but neither has run on real prices
+yet (needs Alpaca API keys). Options flow is not started (needs a paid data provider).** There is
+no trading yet.
 
 ```bash
 # Local (SQLite)

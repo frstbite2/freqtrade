@@ -42,12 +42,14 @@ class UTCDateTime(TypeDecorator):
         return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-def make_engine(url: str) -> Engine:
+def make_engine(url: str, for_migrations: bool = False) -> Engine:
     if url.startswith("sqlite:///") and url != "sqlite:///:memory:":
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
-    if url.startswith("sqlite"):
+    if url.startswith("sqlite") and for_migrations:
         # Python's default SQLite mode commits table changes on the spot, so a migration that
-        # failed half way could not be rolled back. This makes DDL part of the transaction.
+        # failed half way could not be rolled back; this mode makes DDL part of the transaction.
+        # Only migrations use it: in it, a session that has merely read keeps a lock that blocks
+        # every other process's writes until the session ends.
         return create_engine(url, pool_pre_ping=True, connect_args={"autocommit": False})
     return create_engine(url, pool_pre_ping=True)
 
@@ -63,11 +65,23 @@ def init_db(engine: Engine) -> None:
     created before migrations existed: tables and rows already there are never dropped."""
     import backend.models  # noqa: F401  registers tables on Base.metadata
 
+    # A SQLite file is migrated through its own engine in transactional mode (see make_engine).
+    # An in-memory database cannot be reopened, so it is migrated as it is (tests only).
+    separate = engine.dialect.name == "sqlite" and engine.url.database not in (None, "", ":memory:")
+    migrator = (
+        make_engine(engine.url.render_as_string(hide_password=False), for_migrations=True)
+        if separate
+        else engine
+    )
     config = migration_config()
-    with engine.begin() as connection:
-        config.attributes["connection"] = connection
-        command.upgrade(config, "head")
-        drift = schema_drift(connection)
+    try:
+        with migrator.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
+            drift = schema_drift(connection)
+    finally:
+        if separate:
+            migrator.dispose()
     if drift:
         # A table that existed before migrations may predate a column added to its model since.
         logger.error("database schema differs from the models: %s", drift)

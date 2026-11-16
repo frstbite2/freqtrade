@@ -1,6 +1,39 @@
 # AI Trading Platform — Project Status
 
-Last updated: 2026-11-14 · Complete and verified on real data: **1, 4**, and the SEC half of **5** (13F, 13D, 13G), plus scheduled ingestion · Built, live verification pending: **2** · Built, unverified on real data: **3** · Not started: options flow (needs a paid provider), 6 to 10
+Last updated: 2026-11-16 · Complete and verified on real data: **1, 4**, and the SEC half of **5** (13F, 13D, 13G), plus scheduled ingestion and database migrations · Built, live verification pending: **2** · Built, unverified on real data: **3** · Not started: options flow (needs a paid provider), 6 to 10
+
+## Status at a glance
+
+Where the work lives: everything through 13F is on `claude/ai-trading-platform-g23fcw`. Schedules
+13D/13G, scheduled ingestion and platform CI are in draft PR #2; database migrations are in draft
+PR #3, stacked on #2. Neither PR is merged; both wait for the owner's review. Paper trading only:
+`trading_mode: live` is a validation error.
+
+**Complete and verified**
+- Foundation: settings, logging with secret redaction, API with authentication and rate limit,
+  audit log, Docker stack (M1).
+- SEC insider filings, Forms 3/4/5: parsing, classification, scoring, history; checked against
+  SEC's own data sets (M4).
+- SEC Form 13F holdings and Schedules 13D/13G: parsing, ingestion, history, API; checked on real
+  filings (M5, SEC half).
+- Scheduled ingestion of all SEC sources, reviewed for continuous running (section 5f).
+- Database migrations with Alembic, audited against every past schema and real databases (5g).
+- CI on every pull request: platform tests (also on PostgreSQL), lint, type check, Docker image
+  build with tests inside it, and upstream freqtrade's own CI.
+
+**Built, waiting for credentials or live verification**
+- Market data (M2): the Alpaca adapter has never called the real API. Needs free Alpaca paper
+  keys (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY`) and network access to `data.alpaca.markets`.
+- Technical analysis (M3): tested only on constructed price series; it runs on real prices once
+  M2 is verified.
+- Full Docker stack on a normal network: the image is built and tested in CI, but database, API
+  and worker together have only run in the development sandbox, which cannot reach sec.gov.
+
+**Not started**
+- Options flow (M5): needs a paid data provider; the owner decides which, if any.
+- Milestones 6 to 10: on hold until the owner has reviewed PRs #2 and #3.
+
+No API keys are configured. SEC EDGAR needs only `SEC_USER_AGENT` (a name and contact email).
 
 Milestone 4 (insider filings) was done before Milestone 2 (market data) at the owner's request,
 because SEC EDGAR needs no API key and could be verified against real data immediately.
@@ -124,8 +157,8 @@ The full compose stack (database, API, worker together) has still only been star
 no route to sec.gov, so the worker's runs there ended as recorded failures, which is the designed
 behaviour; scheduled ingestion against live EDGAR was verified outside the container.
 
-Checks that now gate every change: `pytest` (403 tests pass with PostgreSQL available for the
-migration tests, 391 on SQLite alone; 12 opt-in or database-specific tests skip), `ruff check` and
+Checks that now gate every change: `pytest` (412 tests pass with PostgreSQL available for the
+migration tests, 399 on SQLite alone; 12 opt-in or database-specific tests skip), `ruff check` and
 `ruff format`, and
 `mypy --config-file backend/mypy.ini backend` (0 errors; it reported 91 when first run, all fixed).
 
@@ -620,8 +653,9 @@ Safety audit (2026-11-15) and what it changed:
   for `failed_filings` it stands only until the next ingestion run. All seven now adopt with no
   difference from the models and no rows lost. The seven schemas are kept as test fixtures.
 - **Failed migration.** On SQLite a migration that failed half way kept its table changes (Python's
-  default SQLite mode commits them immediately). `make_engine` now opens SQLite with transactional
-  DDL, so a failure rolls back everything on both databases. This applies to all SQLite use.
+  default SQLite mode commits them immediately). Migrations now run on SQLite with transactional
+  DDL, so a failure rolls back everything on both databases. Only migrations use that mode (see
+  the reassessment below).
 - **Lock.** Besides four processes starting at once, a process is shown to wait while another
   holds the lock, to leave the schema untouched meanwhile, and to finish once it is released.
   PostgreSQL releases the lock itself if the holder dies. There is no time limit on the wait.
@@ -639,6 +673,22 @@ Docker stack: a database created by the previous image was adopted (revision rec
 only grew, `downgrade base` refused), and three cold starts of API and worker together on an empty
 database each ran the baseline exactly once with no errors. CI runs the migration tests against a
 PostgreSQL service.
+
+Reassessment against the updated PR #2 (2026-11-16). PR #2's fixes merged into the migrations
+branch without conflict and changed no table. One regression was found in the migrations work
+itself: transactional DDL had been switched on for every SQLite connection, and in that mode a
+session that has only read keeps a lock that blocks other processes' writes until it ends. PR #2's
+new test of a manual ingest running beside the worker failed with "database is locked". Only
+migrations now use that mode, through their own connection, both at start-up and from the
+`alembic` command. The failed-migration test runs through both paths; with the start-up path's
+setting removed it fails. PostgreSQL was never affected.
+
+Verified after the reassessment: full suite 412 passed with PostgreSQL, 399 on SQLite (12 skipped);
+migration tests 18 passed on SQLite (2 lock tests skipped) and 13 on PostgreSQL; PR #2's scheduler
+tests, including the race between a manual ingest and the worker, pass on SQLite and on
+PostgreSQL; the seven real databases (81,173 rows) again kept every row unchanged. In the sandbox
+Docker stack, a cold start ran the baseline once with no errors, and stopping the worker mid-run
+recorded the run as interrupted, naming the target it had not reached, within 4 seconds.
 
 Not done: offline SQL script generation (`alembic --sql`); TimescaleDB hypertables (no table uses
 them yet).
@@ -658,3 +708,7 @@ them yet).
 - Uvicorn's own access log lines are plain text, not JSON (they contain no secrets).
 - Single shared bearer token rather than user accounts; revisit with the dashboard (M9).
 - No database backup job yet; add with deployment docs (M10).
+- Schedules 13D/13G: a holder's history is linked by the reporting person's name, so differently
+  spelled names count as different holders (section 5e).
+- Scheduler limits (section 5f): no alerts on failed runs; a run is judged abandoned by age only;
+  SEC request spacing is per process; `job_run` and `audit_log` have no retention policy.

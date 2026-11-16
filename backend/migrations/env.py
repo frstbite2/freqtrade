@@ -37,7 +37,7 @@ supplied = context.config.attributes.get("connection")
 if supplied is not None:
     run(supplied)
 else:
-    engine = make_engine(get_settings().app.database_url)
+    engine = make_engine(get_settings().app.database_url, for_migrations=True)
     with engine.begin() as own:
         run(own)
     engine.dispose()
