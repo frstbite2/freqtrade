@@ -3,3 +3,6 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 .env.local
+
+# The repository root ignores lib/ (Python packaging); this app keeps its source there.
+!src/lib/
