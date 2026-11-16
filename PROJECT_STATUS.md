@@ -18,8 +18,13 @@ PR #3, stacked on #2. Neither PR is merged; both wait for the owner's review. Pa
   filings (M5, SEC half).
 - Scheduled ingestion of all SEC sources, reviewed for continuous running (section 5f).
 - Database migrations with Alembic, audited against every past schema and real databases (5g).
-- CI on every pull request: platform tests (also on PostgreSQL), lint, type check, Docker image
-  build with tests inside it, and upstream freqtrade's own CI.
+- Unattended running (5h): one SEC ingestion lock for every process (crash-safe, keeps the
+  combined SEC rate under its limit), an ingestion health endpoint, 90-day run-history
+  retention that never touches research data, and production checks on the API token.
+- Backup and restore requirements, with a restore procedure tested on real data (section 7).
+- CI configured for every pull request: platform tests (also on PostgreSQL), lint, type check,
+  Docker image build with tests inside it, and upstream freqtrade's own CI. GitHub Actions has
+  been disabled on this repository since 2026-11-16, so none of it runs until it is re-enabled.
 
 **Built, waiting for credentials or live verification**
 - Market data (M2): the Alpaca adapter has never called the real API. Needs free Alpaca paper
@@ -160,9 +165,9 @@ The full compose stack (database, API, worker together) has still only been star
 no route to sec.gov, so the worker's runs there ended as recorded failures, which is the designed
 behaviour; scheduled ingestion against live EDGAR was verified outside the container.
 
-Checks that now gate every change: `pytest` (412 tests pass with PostgreSQL available for the
-migration tests, 399 on SQLite alone; 12 opt-in or database-specific tests skip), `ruff check` and
-`ruff format`, and
+Checks that now gate every change: `pytest` (457 tests pass with PostgreSQL available for the
+database tests, 435 on SQLite alone; the opt-in live tests and database-specific variants skip),
+`ruff check` and `ruff format`, and
 `mypy --config-file backend/mypy.ini backend` (0 errors; it reported 91 when first run, all fixed).
 
 CI: `.github/workflows/platform-ci.yml` runs those checks on every pull request that touches the
@@ -691,6 +696,11 @@ PostgreSQL; the seven real databases (81,173 rows) again kept every row unchange
 Docker stack, a cold start ran the baseline once with no errors, and stopping the worker mid-run
 recorded the run as interrupted, naming the target it had not reached, within 4 seconds.
 
+After section 5h's changes were merged in (2026-11-16): migration tests 18 passed on SQLite and
+13 on PostgreSQL; full suite 435 passed on SQLite and 457 with PostgreSQL; the seven real
+databases again kept every row unchanged; two cold starts of the Docker stack in production mode
+each ran the baseline once with no errors while the worker held the SEC ingestion lock.
+
 Not done: offline SQL script generation (`alembic --sql`); TimescaleDB hypertables (no table uses
 them yet).
 
@@ -766,7 +776,8 @@ a lost lock stopping a run, the health endpoint (healthy, failed, interrupted an
 overdue, never run, database down, token required), retention (only eligible rows go; every
 research table's row count unchanged), production token rules, docs gating, credentials absent
 from every response, and the compose file. Full suite: 417 passed on SQLite (11 skipped), 426
-with PostgreSQL (10 skipped). In the sandbox Docker stack, in production mode: keepalives active
+with PostgreSQL (10 skipped), on PR #2's branch (with the migrations of PR #3: 435 and 457).
+In the sandbox Docker stack, in production mode: keepalives active
 (`tcp_keepalives_idle=30`, from the command line); a manual ingest beside the worker exited with
 status 1 and the message; `docker kill` of the worker freed the lock in 291 ms and the restarted
 worker closed the dead run as abandoned at once; `docker compose stop` recorded the run as
