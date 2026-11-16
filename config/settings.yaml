@@ -44,5 +44,5 @@ ingestion:
   beneficial_every_minutes: 360
   institutional_every_minutes: 1440
   retry_after_minutes: 15       # wait after a failed run before trying again
-  stale_after_minutes: 180      # a run still marked running after this is treated as abandoned
+  run_history_days: 90          # delete older run records (never filings or audit records)
   poll_seconds: 60

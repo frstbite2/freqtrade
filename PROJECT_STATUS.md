@@ -552,15 +552,18 @@ the `watchlist`, every six hours), `institutional` (13F for `tracked_managers`, 
 | Requirement | How it is met |
 |---|---|
 | Safe to run repeatedly | Ingestion skips filings already stored; a second pass stores nothing and makes no requests for them |
-| Duplicate protection | A unique constraint lets the database hold only one running row per job, so two workers cannot run the same job. A run left "running" past `stale_after_minutes` is closed as abandoned and taken over |
+| Duplicate protection | Every process that contacts SEC holds the SEC ingestion lock (section 5h), so two workers never run at once. A run still marked running when a process takes the lock belonged to a process that died, and is closed as abandoned at once. A unique constraint on running rows is a second guard |
 | Retries | Each request retries with backoff; a failed job is tried again after `retry_after_minutes`; filings that failed are retried on the next run |
 | Failure reporting | Every run is stored in `job_run` with per-target results and an error summary, written to the audit log, logged, and served by `GET /api/v1/jobs` with what is due next |
 | One bad target | Does not stop the others, whatever the error (an unexpected one is logged with its traceback); the run is recorded as `partial` |
 | Another process storing the same filings | A manual ingest or second worker storing a filing first is counted as already stored, not as an error (any other constraint failure is still raised) |
 | Graceful stop | On SIGTERM the worker finishes the current target, records the run as `interrupted` with the targets it did not reach, and exits; an interrupted run is retried after `retry_after_minutes`. The compose file gives the worker 2 minutes to stop |
-| Database or other failure in a pass | Logged; the worker tries again at the next poll instead of exiting |
+| Database or other failure in a pass | Logged; the worker tries again at the next poll instead of exiting. A lost lock connection ends the run after the current target as `interrupted` |
+| Health | `GET /api/v1/health/ingestion` (section 5h) |
+| Run history | Kept 90 days (`run_history_days`), except each job's latest run, success and failure (section 5h) |
 
-Verified: 15 tests, 17 cases (clock-controlled, on the real SEC fixtures) and a live run against EDGAR for
+Verified: 15 tests, 17 cases (clock-controlled, on the real SEC fixtures), the reliability tests of
+section 5h, and a live run against EDGAR for
 5 watchlist tickers and 14 managers (all three jobs succeeded; an immediate second pass ran
 nothing).
 
@@ -579,16 +582,91 @@ failed on the unfixed code:
 - In the 13D/13G API, `schedule=13G` was applied before working out each holder's latest filing,
   so a holder that had moved from 13G to 13D was still listed as a passive 13G holder.
 
-Not done, and limits:
-- No alerts when a run fails (it is recorded and visible, but nobody is notified).
-- A run is considered abandoned only by age: a genuine run longer than `stale_after_minutes`
-  (3 hours) would be taken over by another worker. Real runs took seconds with a warm cache;
-  first runs on a cold cache are longer but were not timed. A heartbeat column would remove the
-  limit; it is a schema change, left for after migrations land.
-- SEC request spacing (8 per second) is per process. A manual ingest during a worker run can
-  together exceed SEC's guideline of 10 per second and get the address blocked for a while.
-- `job_run` and `audit_log` grow without limit (about 30 runs and 200 audit rows a day with the
-  default watchlist); there is no retention policy yet.
+The three limits that review left open (a lock judged by age, SEC request spacing per process, and
+no retention) were fixed on 2026-11-16; see section 5h.
+
+Not done: notifications when a run fails. Failures are recorded, logged and reported by the
+health endpoint, which any monitor can watch; no email or chat integration exists yet.
+
+## 5h. Unattended running: SEC lock, health, retention, API security (complete)
+
+Approved by the owner on 2026-11-16 after a proposal with tradeoffs. Every issue below was first
+reproduced on the unfixed code: two processes together sent 16 SEC requests in one second
+(limit 10); after `kill -9` a job stayed blocked for 3 hours; production started with the token
+`change-me` and served `/docs`; there was no ingestion health check.
+
+**One SEC ingestion lock** (`backend/database/locks.py`). The worker, the three ingest commands
+and the two verify commands all take it before contacting SEC, and `EdgarClient` refuses to send
+a real request unless the process holds it, so no entry point can bypass it.
+- Only one process talks to SEC at a time, so the combined rate is one process's (8 requests a
+  second, under SEC's 10), and two workers never run jobs at once.
+- PostgreSQL: a session advisory lock on its own connection. The server drops it when the
+  connection ends, so a crashed or killed process frees it at once (measured: 0.2 to 0.3 s after
+  `kill -9` or `docker kill`). TCP keepalives on both sides (`make_engine`, and the `db` service's
+  command in the compose file) end the connection of a host that vanished within about a minute.
+- SQLite, local development only: an OS lock on `<database file>.ingest-lock` (`fcntl` on Linux
+  and macOS, `msvcrt` on Windows), released by the OS when the process ends. It coordinates
+  processes on one machine using the same file; network file systems may not honour it.
+- The worker takes the lock per pass and skips a pass while another process holds it. The
+  commands wait, saying why, or exit with `--no-wait` (status 1). `scheduler --once` behaves like
+  the commands.
+- The age-based takeover and its `stale_after_minutes` setting are gone: a run marked running
+  when a process takes the lock is closed at once as abandoned, and a long run can never be taken
+  over while its process lives. The worker checks the lock between targets; if its connection
+  was lost, the run ends as `interrupted`, naming the targets not reached, and is retried after
+  `retry_after_minutes`. Within one target nothing checks: if the database restarted mid-target,
+  a second process could start before the first notices. Ingestion tolerates duplicates, so data
+  stays correct, but SEC traffic could briefly double.
+
+**Ingestion health:** `GET /api/v1/health/ingestion` (needs the token). Per job: last run, last
+success, last failure with its error, the running run, whether the last run was interrupted,
+next due time and whether it is overdue (not started 30 minutes after it was due). Also the
+database, whether a process holds the lock now (PostgreSQL only), and a list of problems.
+HTTP 503 and `unhealthy` when the database is unreachable, a job's last run failed or a job is
+overdue (the scheduler is then reported `stalled`); `degraded` (200) when a run was partial or
+interrupted, or a job has never run; `disabled` when ingestion is off. No notification channel is
+connected yet; a monitor, or a future notifier, reads this endpoint (`scheduler.ingestion_health`).
+
+**Retention.** Eligible for deletion, and only this: rows of `job_run` (a run's per-target counts
+and error text) that finished more than `run_history_days` (90) ago, except each job's latest run
+(it decides when the job is next due), latest success and latest failure (the health check shows
+them). Running rows are never touched. Never deleted: `audit_log` (kept indefinitely; it keeps a
+summary of every run: job, status, target count and which targets had problems), and every
+filing, holding, transaction, owner, issuer, manager and price table. Checked before
+implementing: nothing references `job_run`; only `next_due`, the jobs and health endpoints read
+it. After 90 days a run's per-target error text is gone; its audit summary remains. Pruning runs
+at the end of each worker pass that ran jobs and is itself written to the audit log.
+
+**API security.**
+- Outside development the API refuses to start without a token, or with a placeholder
+  (`change-me` and similar, in any case). In production the token must also be at least 32
+  characters with at least 8 distinct ones. Error messages never include the token.
+- `/docs`, `/redoc` and `/openapi.json` exist in development only.
+- Error text stored for job runs (and so served by the jobs and health endpoints) is redacted
+  like the logs: secret values and passwords in connection URLs become `***`.
+  `POSTGRES_PASSWORD` is now redacted too.
+- The compose file publishes the API on `127.0.0.1` only and does not publish the database or the
+  worker; a test fails if that changes. There is no remote access or public deployment.
+
+**Backups (deferred to M10; requirements only).** See section 6.
+
+Verified (2026-11-16): reliability tests, 26 functions: 36 cases pass on SQLite (1 needs
+PostgreSQL), 45 pass with PostgreSQL. They use real child processes, killed with SIGKILL where
+the test says so, and cover the lock (second process refused, freed on kill, waiting, `--no-wait`,
+a lost connection), every SEC command run as its own process while the lock is held, the
+combined rate across two processes (at most 8 requests in any second with the lock; more than 10
+without it), the worker skipping a pass, a killed worker's run closed and redone a minute later,
+a lost lock stopping a run, the health endpoint (healthy, failed, interrupted and running,
+overdue, never run, database down, token required), retention (only eligible rows go; every
+research table's row count unchanged), production token rules, docs gating, credentials absent
+from every response, and the compose file. Full suite: 417 passed on SQLite (11 skipped), 426
+with PostgreSQL (10 skipped). In the sandbox Docker stack, in production mode: keepalives active
+(`tcp_keepalives_idle=30`, from the command line); a manual ingest beside the worker exited with
+status 1 and the message; `docker kill` of the worker freed the lock in 291 ms and the restarted
+worker closed the dead run as abandoned at once; `docker compose stop` recorded the run as
+interrupted in 4 s; health answered 503 naming the failed, interrupted and never-run jobs;
+`/docs` and `/openapi.json` answered 404; no log line contained the token or the database
+password.
 
 ## 6. Known shortcuts and deferred items
 
@@ -602,4 +680,10 @@ Not done, and limits:
   exposing the API beyond localhost, move it to a shared store or a reverse proxy.
 - Uvicorn's own access log lines are plain text, not JSON (they contain no secrets).
 - Single shared bearer token rather than user accounts; revisit with the dashboard (M9).
-- No database backup job yet; add with deployment docs (M10).
+- Backups are deferred to M10. Requirements: a nightly `pg_dump --format=custom` of the platform
+  database kept off the database host, at least 14 daily and 8 weekly copies; a restore drill
+  at least quarterly that restores into a fresh database and checks row counts; later,
+  continuous archiving for point-in-time recovery. Most research data can be re-ingested from
+  SEC with its original publication times (the EDGAR cache volume speeds that up); the audit log
+  and run history cannot, so they are what backups chiefly protect. The tested restore procedure
+  is in section 7 (in #3).

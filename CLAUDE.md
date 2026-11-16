@@ -32,6 +32,7 @@ cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live -k edgar
 # Large holders (13D/13G) and the scheduler for all SEC ingestion
 .venv/bin/python -m backend.services.beneficial_ownership.ingest GME --since 2024-12-01
 .venv/bin/python -m backend.services.scheduler --once        # run whatever is due; omit --once to loop
+# Every SEC command waits while another process ingests; add --no-wait to exit instead.
 
 # Market data: live verification is PENDING until Alpaca keys exist
 cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.venv/bin/pytest -m live -k alpaca
@@ -69,5 +70,10 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
   2024 stay "figures unknown"; never guess them. Persons on one filing are never summed.
 - New ingestion goes through `backend/services/scheduler.py` (add a job to `job_table`); it must be
   idempotent and record failures per target.
+- Every process that contacts SEC holds the SEC ingestion lock (`backend/database/locks.py`);
+  `EdgarClient` refuses real requests without it. A new SEC command uses `sec_ingestion` and
+  `add_wait_option`. Never add a second lock or a way around it.
+- Retention may delete only old `job_run` rows (`scheduler.prune_run_history`). Never delete
+  audit records or any filing, holding, transaction or price data automatically.
 - Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
   withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

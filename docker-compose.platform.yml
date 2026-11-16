@@ -10,6 +10,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-trading}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # A connection whose peer vanished is dropped within about a minute (30 s idle, then 3
+    # probes 10 s apart), so a dead worker's SEC ingestion lock is freed (backend/database/locks.py).
+    command: ["postgres", "-c", "tcp_keepalives_idle=30", "-c", "tcp_keepalives_interval=10",
+              "-c", "tcp_keepalives_count=3"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

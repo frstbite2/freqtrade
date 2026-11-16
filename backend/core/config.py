@@ -83,9 +83,11 @@ class IngestionSchedule(_Strict):
     insider_every_minutes: int = Field(60, ge=5)  # Forms 3/4/5 for the watchlist
     beneficial_every_minutes: int = Field(360, ge=5)  # Schedules 13D/13G for the watchlist
     institutional_every_minutes: int = Field(1440, ge=5)  # Form 13F for the tracked managers
-    retry_after_minutes: int = Field(15, ge=1)  # wait this long after a failed run
-    stale_after_minutes: int = Field(180, ge=5)  # a run still "running" after this was abandoned
+    retry_after_minutes: int = Field(15, ge=1)  # wait this long after a failed or interrupted run
     poll_seconds: int = Field(60, ge=1)
+    # Finished runs older than this are deleted from `job_run`, except each job's latest run,
+    # latest success and latest failure. Nothing else is ever deleted (see scheduler.py).
+    run_history_days: int = Field(90, ge=7)
 
 
 class AppConfig(_Strict):
@@ -157,7 +159,11 @@ def get_settings() -> Settings:
     return load_settings()
 
 
+# Secrets that are not provider credentials: redacted, but not listed as providers.
+OTHER_SECRET_ENV_VARS = ("POSTGRES_PASSWORD",)
+
+
 def secret_values() -> list[str]:
-    """Current secret values, used only by the log redactor."""
-    names = [v for env in SECRET_ENV_VARS.values() for v in env]
+    """Current secret values, used by the redactor for logs and stored error messages."""
+    names = [v for env in SECRET_ENV_VARS.values() for v in env] + list(OTHER_SECRET_ENV_VARS)
     return [os.environ[n] for n in names if os.environ.get(n)]

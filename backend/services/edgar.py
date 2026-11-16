@@ -18,6 +18,7 @@ from pathlib import Path
 import httpx
 
 from backend.core.http import RetriesExhausted, Throttle, get_with_retry
+from backend.database import locks
 
 
 logger = logging.getLogger(__name__)
@@ -64,7 +65,11 @@ class EdgarClient:
         min_interval: float = 0.125,  # 8 requests/second, under SEC's limit of 10
         max_attempts: int = 4,
         transport: httpx.BaseTransport | None = None,
+        require_lock: bool | None = None,
     ) -> None:
+        """`require_lock` (default: whenever requests really go to SEC, i.e. no test transport)
+        refuses to send a request unless this process holds the SEC ingestion lock, so no
+        command can exceed SEC's rate limit by running beside another."""
         if not user_agent or "@" not in user_agent:
             raise EdgarNotConfigured(
                 "SEC_USER_AGENT must be set to a name and contact email, as SEC requires"
@@ -77,6 +82,7 @@ class EdgarClient:
         self._cache_dir = Path(cache_dir)
         self._throttle = Throttle(min_interval)
         self._max_attempts = max_attempts
+        self._require_lock = transport is None if require_lock is None else require_lock
 
     @property
     def requests_made(self) -> int:
@@ -109,6 +115,11 @@ class EdgarClient:
         return body
 
     def _fetch(self, url: str) -> bytes:
+        if self._require_lock and not locks.held():
+            raise RuntimeError(
+                "SEC requests need the SEC ingestion lock (backend/database/locks.py), so that "
+                "processes together stay within SEC's rate limit"
+            )
         try:
             response = get_with_retry(
                 self._http, url, self._throttle, max_attempts=self._max_attempts

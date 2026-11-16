@@ -50,7 +50,11 @@ Holders above 5% (Schedules 13D and 13G), and keeping everything up to date:
 curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/ownership/GME/holders"
 .venv/bin/python -m backend.services.scheduler --once   # or run the `worker` service in Docker
 curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/jobs"
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/health/ingestion"   # 503 if failing
 ```
+
+Only one process talks to SEC at a time (SEC allows 10 requests a second). An ingest command run
+while the worker is ingesting waits for it, or exits at once with `--no-wait`.
 
 A 13D filer may seek to influence the company; a 13G filer states it is passive. The tickers and
 managers that are refreshed automatically are `watchlist` and `tracked_managers` in
@@ -71,7 +75,9 @@ prices, so it also answers "unavailable" until Alpaca keys are set:
 curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/technical/AAPL?timeframes=1d,1w"
 ```
 
-Settings live in `config/*.yaml`; secrets only in `.env` (never committed).
+Settings live in `config/*.yaml`; secrets only in `.env` (never committed). Outside development
+(`APP_ENV=test` or `production`) the API refuses to start with a placeholder token, production
+requires a token of at least 32 characters, and the interactive `/docs` are switched off.
 
 ---
 

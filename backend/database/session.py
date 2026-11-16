@@ -34,9 +34,19 @@ class UTCDateTime(TypeDecorator):
         return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
+# TCP keepalives: a dead peer is noticed within about a minute (30 s idle, then 3 probes 10 s
+# apart) instead of the operating system's default of about two hours. The server side is set in
+# docker-compose.platform.yml; together they bound how long a vanished worker holds the
+# SEC ingestion lock (backend/database/locks.py).
+POSTGRES_KEEPALIVES = {"keepalives": 1, "keepalives_idle": 30, "keepalives_interval": 10,
+                       "keepalives_count": 3}  # fmt: skip
+
+
 def make_engine(url: str) -> Engine:
     if url.startswith("sqlite:///") and url != "sqlite:///:memory:":
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
+    if url.startswith("postgresql"):
+        return create_engine(url, pool_pre_ping=True, connect_args=POSTGRES_KEEPALIVES)
     return create_engine(url, pool_pre_ping=True)
 
 

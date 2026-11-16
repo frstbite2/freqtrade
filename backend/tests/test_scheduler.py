@@ -14,6 +14,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from backend.core.config import load_settings
+from backend.database.locks import IngestionLock
 from backend.main import create_app
 from backend.models import AuditLog
 from backend.models.beneficial import BeneficialFiling
@@ -85,35 +86,29 @@ def test_jobs_run_again_only_when_their_interval_has_passed(db_session, settings
     assert count(db_session, JobRun) == 7 and count(db_session, InsiderFiling) == stored
 
 
-def test_a_job_already_running_is_not_started_twice(db_session, settings, factory, tmp_path):
-    db_session.add(JobRun(job="insider", active=True, started_at=NOW, status="running", detail={}))
-    db_session.commit()
-    assert (
-        scheduler.run_job(db_session, settings, "insider", factory(), NOW + timedelta(minutes=5))
-        is None
-    )
-    assert count(db_session, InsiderFiling) == 0
-    # A second connection sees the same lock: the database enforces it, not this process.
-    with sessionmaker(db_session.get_bind())() as other:
-        assert (
-            scheduler.run_job(other, settings, "insider", factory(), NOW + timedelta(minutes=6))
-            is None
-        )
-    # Other jobs are not blocked by it.
-    assert (
-        scheduler.run_job(db_session, settings, "beneficial", factory(), NOW).status == "succeeded"
-    )
+def test_a_job_is_not_started_while_another_process_holds_the_ingestion_lock(
+    db_session, settings, factory
+):
+    other = IngestionLock(db_session.get_bind())  # stands in for another worker
+    assert other.acquire(wait=False)
+    try:
+        assert scheduler.run_job(db_session, settings, "insider", factory(), NOW) is None
+        assert count(db_session, InsiderFiling) == 0 and count(db_session, JobRun) == 0
+    finally:
+        other.release()
+    assert scheduler.run_job(db_session, settings, "insider", factory(), NOW).status == "succeeded"
 
 
-def test_abandoned_run_is_taken_over_after_the_stale_limit(db_session, settings, factory):
+def test_a_run_marked_running_without_the_lock_held_is_closed_at_once(
+    db_session, settings, factory
+):
+    """Its process died: whoever runs a job holds the lock, and the lock is free."""
     db_session.add(JobRun(job="insider", active=True, started_at=NOW, status="running", detail={}))
     db_session.commit()
-    run = scheduler.run_job(
-        db_session, settings, "insider", factory(), NOW + timedelta(minutes=181)
-    )
+    run = scheduler.run_job(db_session, settings, "insider", factory(), NOW + timedelta(minutes=1))
     assert run.status == "succeeded"
     old = db_session.scalars(select(JobRun).order_by(JobRun.id)).first()
-    assert (old.status, old.active) == ("failed", None) and "abandoned" in old.error
+    assert (old.status, old.active) == ("failed", None) and old.error.startswith("abandoned")
 
 
 def test_one_bad_target_does_not_stop_the_others(db_session, tmp_path, factory):
@@ -322,7 +317,7 @@ def test_worker_loop_survives_a_failing_pass(db_session, tmp_path, factory, monk
     settings = settings_with(tmp_path, "watchlist: [GME]\ningestion:\n  poll_seconds: 1\n")
     stop, passes = threading.Event(), []
 
-    def flaky(session, settings, client_factory, force=None, stop=None):
+    def flaky(session, settings, client_factory, force=None, stop=None, **_):
         passes.append(1)
         if len(passes) == 1:
             raise OperationalError("SELECT 1", {}, Exception("database restarting"))
