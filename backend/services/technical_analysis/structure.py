@@ -29,7 +29,8 @@ def find_swings(df: pd.DataFrame, k: int = SWING_BARS) -> list[Swing]:
     """Swing highs and lows in the order they became known, each labelled against the previous
     swing of its kind. Later bars never change an earlier swing."""
     high, low = df["high"].to_numpy(dtype=float), df["low"].to_numpy(dtype=float)
-    swings, last = [], {}
+    swings: list[Swing] = []
+    last: dict[str, Swing] = {}
     for i in range(k, len(df) - k):
         for kind, series, pick in (("high", high, max), ("low", low, min)):
             window = series[i - k : i + k + 1]
@@ -281,7 +282,8 @@ def detect_squeeze_and_expansion(
 def detect_exhaustion(df: pd.DataFrame, swings: list[Swing]) -> list[Detection]:
     """Momentum divergence: price makes a new extreme while RSI does not."""
     rsi = df["rsi_14"].to_numpy(dtype=float)
-    events, previous = [], {}
+    events: list[Detection] = []
+    previous: dict[str, Swing] = {}
     for swing in swings:
         before = previous.get(swing.kind)
         previous[swing.kind] = swing

@@ -49,7 +49,7 @@ def test_form4_open_market_purchase_fields():
     assert f.period_of_report == date(2026, 11, 2)
     assert f.original_filed_date is None and f.aff10b5one is False
     (owner,) = f.owners
-    assert (owner.name, owner.officer_title) == ("TAN LIP BU", "CEO")
+    assert (owner.name, owner.officer_title) == ("TAN LIP BU", "CEO")  # codespell:ignore bu
     assert (owner.is_director, owner.is_officer, owner.is_ten_percent_owner) == (True, True, False)
 
     buy, direct, plan401k = f.rows

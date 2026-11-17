@@ -29,6 +29,9 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from backend.core.config import get_settings
+from backend.core.logging import redact
+from backend.database.locks import add_wait_option, sec_ingestion
+from backend.database.session import make_engine
 from backend.services.edgar import EdgarClient, EdgarError
 from backend.services.insider_intelligence.parser import (
     FilingParseError,
@@ -71,7 +74,7 @@ def _str(text: str | None) -> str | None:
 
 
 def _ours(row: Row, derivative: bool, holding: bool) -> tuple:
-    base = (
+    base: tuple = (
         _str(row.security_title),
         _num(row.shares_after),
         row.ownership,
@@ -96,7 +99,7 @@ def _ours(row: Row, derivative: bool, holding: bool) -> tuple:
 
 
 def _theirs(row: dict, derivative: bool, holding: bool) -> tuple:
-    base = (
+    base: tuple = (
         _str(row["SECURITY_TITLE"]),
         _num(row["SHRS_OWND_FOLWNG_TRANS"]),
         row["DIRECT_INDIRECT_OWNERSHIP"] or None,
@@ -167,7 +170,7 @@ def compare(parsed: ParsedFiling, sec: dict[str, list[dict]]) -> tuple[list[str]
         ),
     }
     differing = [name for name, (ours, theirs) in checks.items() if ours != theirs]
-    realigned = []
+    realigned: list[str] = []
     for name, table, holding in (
         ("NONDERIV_TRANS", "non_derivative", False),
         ("NONDERIV_HOLDING", "non_derivative", True),
@@ -199,7 +202,14 @@ def main() -> None:
     args.add_argument("--sample", type=int, default=300)
     args.add_argument("--seed", type=int, default=1)
     args.add_argument("--show", type=int, default=10, help="mismatching filings to list")
+    add_wait_option(args)
     opts = args.parse_args()
+    # Verification downloads filings from SEC too, so it takes the same lock as ingestion.
+    with sec_ingestion(make_engine(get_settings().app.database_url), wait=not opts.no_wait):
+        _verify(opts)
+
+
+def _verify(opts: argparse.Namespace) -> None:
 
     settings = get_settings()
     client = EdgarClient(settings.app.sec_user_agent, settings.app.edgar_cache_dir)
@@ -209,7 +219,12 @@ def main() -> None:
             everything = sorted({(r["ACCESSION_NUMBER"], int(r["ISSUERCIK"])) for r in reader})
         sample = random.Random(opts.seed).sample(everything, min(opts.sample, len(everything)))  # noqa: S311
         wanted = {accession for accession, _ in sample}
-        names = ("SUBMISSION", "REPORTINGOWNER", "NONDERIV_TRANS", "NONDERIV_HOLDING")
+        names: tuple[str, ...] = (
+            "SUBMISSION",
+            "REPORTINGOWNER",
+            "NONDERIV_TRANS",
+            "NONDERIV_HOLDING",
+        )
         names += ("DERIV_TRANS", "DERIV_HOLDING")
         tables = {name: _table(archive, f"{name}.tsv", wanted) for name in names}
 
@@ -228,7 +243,7 @@ def main() -> None:
             parsed = parse_ownership_xml(match.group(1))
         except (EdgarError, FilingParseError) as exc:
             outcome["could_not_parse"] += 1
-            print(f"COULD NOT PARSE {accession}: {exc}")
+            print(redact(f"COULD NOT PARSE {accession}: {exc}"))
             continue
         differing, realigned = compare(parsed, {name: tables[name][accession] for name in names})
         outcome["mismatch" if differing else "realigned" if realigned else "match"] += 1

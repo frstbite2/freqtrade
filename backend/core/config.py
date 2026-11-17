@@ -1,6 +1,7 @@
 """Configuration: non-secret settings from config/*.yaml, secrets only from the environment."""
 
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -76,6 +77,20 @@ class StrategiesConfig(_Strict):
     scoring_weights: ScoringWeights = ScoringWeights()
 
 
+class IngestionSchedule(_Strict):
+    """How often the worker (`python -m backend.services.scheduler`) refreshes SEC data."""
+
+    enabled: bool = True
+    insider_every_minutes: int = Field(60, ge=5)  # Forms 3/4/5 for the watchlist
+    beneficial_every_minutes: int = Field(360, ge=5)  # Schedules 13D/13G for the watchlist
+    institutional_every_minutes: int = Field(1440, ge=5)  # Form 13F for the tracked managers
+    retry_after_minutes: int = Field(15, ge=1)  # wait this long after a failed or interrupted run
+    poll_seconds: int = Field(60, ge=1)
+    # Finished runs older than this are deleted from `job_run`, except each job's latest run,
+    # latest success and latest failure. Nothing else is ever deleted (see scheduler.py).
+    run_history_days: int = Field(90, ge=7)
+
+
 class AppConfig(_Strict):
     environment: Literal["development", "test", "production"] = "development"
     # Only paper trading exists. Live trading gets its own gated config in Milestone 7.
@@ -93,6 +108,9 @@ class AppConfig(_Strict):
     api_rate_limit_per_minute: int = Field(120, ge=1, le=10_000)  # per client address
     # Investment managers (SEC CIK numbers) whose quarterly 13F filings are tracked.
     tracked_managers: tuple[int, ...] = ()
+    # Tickers whose insider (Forms 3/4/5) and 13D/13G filings are ingested on a schedule.
+    watchlist: tuple[str, ...] = ()
+    ingestion: IngestionSchedule = IngestionSchedule()
 
 
 class Settings(_Strict):
@@ -142,7 +160,17 @@ def get_settings() -> Settings:
     return load_settings()
 
 
+# Secrets that are not provider credentials: redacted, but not listed as providers.
+# SEC_USER_AGENT holds the operator's name and contact email, which SEC requires.
+OTHER_SECRET_ENV_VARS = ("POSTGRES_PASSWORD", "SEC_USER_AGENT")
+_EMAIL = re.compile(r"[^\s<>()\[\],;\"']+@[^\s<>()\[\],;\"']+")
+
+
 def secret_values() -> list[str]:
-    """Current secret values, used only by the log redactor."""
-    names = [v for env in SECRET_ENV_VARS.values() for v in env]
-    return [os.environ[n] for n in names if os.environ.get(n)]
+    """Current secret values, used by the redactor for logs and stored error messages."""
+    names = [v for env in SECRET_ENV_VARS.values() for v in env] + list(OTHER_SECRET_ENV_VARS)
+    values = [os.environ[n] for n in names if os.environ.get(n)]
+    # The contact address alone is personal data too, wherever it appears without the name.
+    values += _EMAIL.findall(os.environ.get("SEC_USER_AGENT", ""))
+    # Longest first, so a value that contains another is replaced whole.
+    return sorted(set(values), key=len, reverse=True)

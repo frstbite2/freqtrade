@@ -16,6 +16,7 @@ Update it whenever a milestone item is completed or deferred.
 python3 -m venv .venv && .venv/bin/pip install -r requirements-platform.txt
 cd backend && ../.venv/bin/pytest          # platform tests (own pytest.ini)
 .venv/bin/ruff check backend && .venv/bin/ruff format backend
+.venv/bin/mypy --config-file backend/mypy.ini backend   # must stay at 0 errors
 API_AUTH_TOKEN=dev .venv/bin/uvicorn --factory backend.main:create_app --reload
 docker compose -f docker-compose.platform.yml up -d --build   # needs .env (see .env.example)
 
@@ -28,6 +29,11 @@ cd backend && EDGAR_LIVE_TESTS=1 ../.venv/bin/pytest -m live -k edgar
 .venv/bin/python -m backend.services.institutional_analysis.ingest --since 2024-01-01
 .venv/bin/python -m backend.services.institutional_analysis.verify 01jun2025-31aug2025_form13f.zip
 
+# Large holders (13D/13G) and the scheduler for all SEC ingestion
+.venv/bin/python -m backend.services.beneficial_ownership.ingest GME --since 2024-12-01
+.venv/bin/python -m backend.services.scheduler --once        # run whatever is due; omit --once to loop
+# Every SEC command waits while another process ingests; add --no-wait to exit instead.
+
 # Market data: live verification is PENDING until Alpaca keys exist
 cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.venv/bin/pytest -m live -k alpaca
 ```
@@ -39,7 +45,8 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
   explicitly authorizes the Milestone 7 live gate.
 - The risk engine is independent; the decision engine can never override hard limits.
 - Secrets come from environment variables only. Never in YAML, code, logs, or API responses.
-  New secrets are registered in `SECRET_ENV_VARS` (`backend/core/config.py`) so they are redacted,
+  New secrets are registered in `SECRET_ENV_VARS` (`backend/core/config.py`; personal or
+  non-provider values such as `SEC_USER_AGENT` in `OTHER_SECRET_ENV_VARS`) so they are redacted,
   and added to `.env.example` with an empty placeholder.
 - Never fabricate market data, filings, or results. If a provider is not configured, report
   "unavailable" — distinct from zero activity. No silent simulated-data fallbacks.
@@ -60,5 +67,14 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
 - 13F results always state the quarter end and disclosure time, never "currently holds". A 13F-NT or
   a missing quarter is "not comparable", never a sale. Real 13F fixtures live in
   `backend/tests/fixtures/edgar13f/`, stored unmodified.
+- Never blur Schedule 13D (active intent) with 13G (passive). Free-form filings from before December
+  2024 stay "figures unknown"; never guess them. Persons on one filing are never summed.
+- New ingestion goes through `backend/services/scheduler.py` (add a job to `job_table`); it must be
+  idempotent and record failures per target.
+- Every process that contacts SEC holds the SEC ingestion lock (`backend/database/locks.py`);
+  `EdgarClient` refuses real requests without it. A new SEC command uses `sec_ingestion` and
+  `add_wait_option`. Never add a second lock or a way around it.
+- Retention may delete only old `job_run` rows (`scheduler.prune_run_history`). Never delete
+  audit records or any filing, holding, transaction or price data automatically.
 - Insider signals are only clean open-market P/S trades. Never count grants, exercises, tax
   withholding, gifts or plan trades; when a filing is ambiguous, exclude it and record the issue.

@@ -13,8 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.config import get_settings
-from backend.core.logging import setup_logging
-from backend.database.session import init_db, make_engine
+from backend.core.logging import redact, setup_logging
+from backend.database.locks import add_wait_option, sec_ingestion
+from backend.database.session import commit_new, init_db, make_engine
 from backend.models import record_audit
 from backend.models.institutional import (
     InstitutionalFiling,
@@ -64,15 +65,18 @@ def ingest_manager(session: Session, client: EdgarClient, cik: int, since: date)
             if parsed.form != ref.form:
                 raise Form13FError(f"index says {ref.form}, document says {parsed.form}")
             session.add(_to_model(cik, parsed, ref))
-            session.commit()  # one filing is stored completely or not at all
             stored.add(ref.accession)
+            # One filing is stored completely or not at all.
+            if not commit_new(session, InstitutionalFiling, ref.accession):
+                report.already_stored += 1  # another process stored it meanwhile
+                continue
             report.stored += 1
             if parsed.issues:
                 report.with_issues.append(ref.accession)
                 logger.warning("%s stored with issues: %s", ref.accession, parsed.issues)
         except (EdgarError, Form13FError) as exc:
             session.rollback()
-            report.failed[ref.accession] = str(exc)
+            report.failed[ref.accession] = redact(str(exc))
             logger.warning("skipped %s: %s", ref.accession, exc)
 
     manager = session.get(InstitutionalManager, cik)
@@ -146,6 +150,7 @@ def main() -> None:
         default=datetime.now(UTC).date() - timedelta(days=DEFAULT_HISTORY_DAYS),
         help="ingest filings filed on or after this date (default: about eight quarters)",
     )
+    add_wait_option(args)
     opts = args.parse_args()
     settings = get_settings()
     setup_logging(settings.app.log_level, json_format=False)
@@ -154,7 +159,7 @@ def main() -> None:
     init_db(engine)
     client = EdgarClient(settings.app.sec_user_agent, settings.app.edgar_cache_dir)
     try:
-        with sessionmaker(engine)() as session:
+        with sec_ingestion(engine, wait=not opts.no_wait), sessionmaker(engine)() as session:
             for cik in opts.ciks or settings.app.tracked_managers:
                 r = ingest_manager(session, client, cik, opts.since)
                 print(
@@ -164,7 +169,7 @@ def main() -> None:
                     f"{len(r.failed)} failed"
                 )
                 for accession, reason in r.failed.items():
-                    print(f"  FAILED {accession}: {reason}")
+                    print(redact(f"  FAILED {accession}: {reason}"))
     finally:
         client.close()
 

@@ -12,11 +12,12 @@ import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from backend.core.checks import need
 from backend.models.insider import InsiderFiling, InsiderIssuer, InsiderTransaction
 from backend.services.insider_intelligence.history import (
     effective_transactions,
@@ -67,9 +68,22 @@ def _seniority(t: InsiderTransaction) -> tuple[float, str]:
     return 3.0, f"{f.owner_name} (other reporting person)"
 
 
+# Rows that count as signals always state a date, a share count and a price (classify.py).
+def _day(t: InsiderTransaction) -> date:
+    return need(t.transaction_date, "transaction date")
+
+
+def _shares(t: InsiderTransaction) -> Decimal:
+    return need(t.shares, "share count")
+
+
+def _value(t: InsiderTransaction) -> Decimal:
+    return need(t.value, "transaction value")
+
+
 def _cluster(buys: list[InsiderTransaction], who: dict[int, int]) -> int:
     """Most distinct insiders buying within any CLUSTER_DAYS span."""
-    dated = sorted((t.transaction_date, who[t.filing.owner_cik]) for t in buys)
+    dated = sorted((_day(t), who[t.filing.owner_cik]) for t in buys)
     best = 0
     for start, _ in dated:
         end = start + timedelta(days=CLUSTER_DAYS)
@@ -111,10 +125,10 @@ def _ownership_change(
         held = _holdings_reported(latest)
         if held is None:
             continue
-        bought = sum(t.shares for t in rows)
+        bought = sum((_shares(t) for t in rows), Decimal(0))
         before = held - bought
         increase = min(Decimal(1), bought / before) if before > 0 else Decimal(1)
-        value = sum(t.value for t in rows)
+        value = sum((_value(t) for t in rows), Decimal(0))
         weighted += increase * value
         total += value
         measured += 1
@@ -131,12 +145,12 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
     filings = filings_as_of(session, cik, as_of)
     who = owner_groups(filings)  # filer CIK -> the insider it counts as
     dated = [t for t in effective_transactions(filings) if t.transaction_date is not None]
-    window = [t for t in dated if start <= t.transaction_date <= day]
+    window = [t for t in dated if start <= _day(t) <= day]
     buys = [t for t in window if t.signal == "discretionary_buy"]
     sells = [t for t in window if t.signal == "discretionary_sell"]
     buyers = {who[t.filing.owner_cik] for t in buys}
-    buy_value = sum((t.value for t in buys), Decimal(0))
-    sell_value = sum((t.value for t in sells), Decimal(0))
+    buy_value = sum((_value(t) for t in buys), Decimal(0))
+    sell_value = sum((_value(t) for t in sells), Decimal(0))
 
     components = []
     if buys:
@@ -187,14 +201,17 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
             history_start = max(issuer.history_since, start - timedelta(days=HISTORY_DAYS))
             prior_days: dict[int, set] = defaultdict(set)
             for t in dated:
-                if t.signal == "discretionary_buy" and history_start <= t.transaction_date < start:
-                    prior_days[who[t.filing.owner_cik]].add(t.transaction_date)
+                if t.signal == "discretionary_buy" and history_start <= _day(t) < start:
+                    prior_days[who[t.filing.owner_cik]].add(_day(t))
             weight = {0: Decimal(1), 1: Decimal("0.5"), 2: Decimal("0.5")}
-            rarity = sum(
-                t.value * weight.get(len(prior_days[who[t.filing.owner_cik]]), Decimal("0.2"))
-                for t in buys
+            weighted = sum(
+                (
+                    _value(t) * weight.get(len(prior_days[who[t.filing.owner_cik]]), Decimal("0.2"))
+                    for t in buys
+                ),
+                Decimal(0),
             )
-            rarity = float(rarity / buy_value) if buy_value else 0.0
+            rarity = float(weighted / buy_value) if buy_value else 0.0
             components.append(
                 Component(
                     "buyer_history",
@@ -205,11 +222,11 @@ def score_issuer(session: Session, cik: int, as_of: datetime) -> dict | None:
                     f"{sorted(len(prior_days[insider]) for insider in buyers)}",
                 )
             )
-    for name, need in (
+    for name, needs in (
         ("announcement_timing", "an earnings/news calendar (News engine)"),
         ("value_vs_market_cap", "market data (Milestone 2)"),
     ):
-        components.append(Component(name, 0, 10, False, f"unavailable: needs {need}"))
+        components.append(Component(name, 0, 10, False, f"unavailable: needs {needs}"))
 
     available_max = sum(c.max_points for c in components if c.available)
     raw = 100 * sum(c.points for c in components if c.available) / available_max if buys else 0.0

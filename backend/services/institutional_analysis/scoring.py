@@ -16,6 +16,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.core.checks import need
 from backend.models.institutional import InstitutionalFiling, InstitutionalManager
 from backend.services.institutional_analysis.holdings import (
     Change,
@@ -212,7 +213,7 @@ def score_security(session: Session, cusip: str, as_of: datetime) -> dict | None
             | {
                 "institution": names.get(cik, str(cik)),
                 "manager_cik": cik,
-                "disclosed_at": reports[cik][1].disclosed_at.isoformat(),
+                "disclosed_at": need(reports[cik][1].disclosed_at, "disclosure time").isoformat(),
                 "filings": reports[cik][1].filings,
             }
             for cik, c in sorted(rows.items(), key=lambda kv: -kv[1].value)

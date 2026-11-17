@@ -12,8 +12,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.config import get_settings
-from backend.core.logging import setup_logging
-from backend.database.session import init_db, make_engine
+from backend.core.logging import redact, setup_logging
+from backend.database.locks import add_wait_option, sec_ingestion
+from backend.database.session import commit_new, init_db, make_engine
 from backend.models import record_audit
 from backend.models.insider import InsiderFiling, InsiderIssuer, InsiderTransaction
 from backend.services.edgar import (
@@ -85,18 +86,24 @@ def ingest_issuer(session: Session, client: EdgarClient, ticker: str, since: dat
                         f"index says form {ref.form}, document says {parsed.document_type}"
                     )
                 classify.classify_filing(parsed, ref.filed_date)
-                outdated = session.get(InsiderFiling, ref.accession)
-                if outdated is not None:  # classified under older rules: replace it
-                    session.delete(outdated)
-                    session.flush()
-                    report.reclassified += 1
-                session.add(_to_model(parsed, ref))
-                session.commit()  # one filing is stored completely or not at all
+                existing = session.get(InsiderFiling, ref.accession)
                 stored.add(ref.accession)  # an index that lists a filing twice stores it once
-                report.stored += 1
+                if existing is not None:
+                    if existing.classifier_version == classify.CLASSIFIER_VERSION:
+                        report.already_stored += 1  # another process stored it meanwhile
+                        continue
+                    session.delete(existing)  # classified under older rules: replace it
+                    session.flush()
+                session.add(_to_model(parsed, ref))
+                # One filing is stored completely or not at all.
+                if commit_new(session, InsiderFiling, ref.accession):
+                    report.stored += 1
+                    report.reclassified += existing is not None
+                else:
+                    report.already_stored += 1
             except (EdgarError, FilingParseError) as exc:
                 session.rollback()
-                report.failed[ref.accession] = str(exc)
+                report.failed[ref.accession] = redact(str(exc))
                 logger.warning("skipped %s: %s", ref.accession, exc)
 
     issuer = session.get(InsiderIssuer, cik)
@@ -187,6 +194,7 @@ def main() -> None:
         default=datetime.now(UTC).date() - timedelta(days=DEFAULT_HISTORY_DAYS),
         help="ingest filings filed on or after this date (default: three years ago)",
     )
+    add_wait_option(args)
     opts = args.parse_args()
     settings = get_settings()
     setup_logging(settings.app.log_level, json_format=False)
@@ -195,7 +203,7 @@ def main() -> None:
     init_db(engine)
     client = EdgarClient(settings.app.sec_user_agent, settings.app.edgar_cache_dir)
     try:
-        with sessionmaker(engine)() as session:
+        with sec_ingestion(engine, wait=not opts.no_wait), sessionmaker(engine)() as session:
             for ticker in opts.tickers:
                 r = ingest_issuer(session, client, ticker, opts.since)
                 print(
@@ -206,7 +214,7 @@ def main() -> None:
                     f"{len(r.failed)} failed"
                 )
                 for accession, reason in r.failed.items():
-                    print(f"  FAILED {accession}: {reason}")
+                    print(redact(f"  FAILED {accession}: {reason}"))
     finally:
         client.close()
 

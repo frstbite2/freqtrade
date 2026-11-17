@@ -10,6 +10,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-trading}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # A connection whose peer vanished is dropped within about a minute (30 s idle, then 3
+    # probes 10 s apart), so a dead worker's SEC ingestion lock is freed (backend/database/locks.py).
+    command: ["postgres", "-c", "tcp_keepalives_idle=30", "-c", "tcp_keepalives_interval=10",
+              "-c", "tcp_keepalives_count=3"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -29,5 +33,27 @@ services:
     ports:
       - "127.0.0.1:8000:8000"   # localhost only
 
+  # Scheduled SEC ingestion (Forms 3/4/5, 13D/13G, 13F). Needs SEC_USER_AGENT in .env.
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.platform
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-trading}
+    command: ["python", "-m", "backend.services.scheduler"]
+    # On stop the worker finishes its current target and records the run as interrupted;
+    # Docker's default 10 s before killing it is usually too short for that.
+    stop_grace_period: 2m
+    healthcheck:
+      disable: true   # the image's check probes the API port, which the worker does not serve
+    volumes:
+      - edgar_cache:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  edgar_cache:

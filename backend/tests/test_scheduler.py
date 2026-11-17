@@ -1,0 +1,352 @@
+"""Scheduled ingestion: what is due, locking, failure isolation and reporting.
+
+Ingestion itself runs on the real SEC fixtures; schedules and clocks are set by the tests.
+"""
+
+import json
+import threading
+from datetime import UTC, datetime, timedelta
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker
+
+from backend.core.config import load_settings
+from backend.database.locks import IngestionLock
+from backend.main import create_app
+from backend.models import AuditLog
+from backend.models.beneficial import BeneficialFiling
+from backend.models.insider import InsiderFiling
+from backend.models.institutional import InstitutionalFiling
+from backend.models.jobs import JobRun
+from backend.services import scheduler
+from backend.services.edgar import EdgarClient, EdgarNotConfigured
+from backend.tests.conftest import TEST_USER_AGENT, edgar_handler
+
+
+NOW = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
+PERSHING = 1336528
+
+
+def settings_with(tmp_path, body: str):
+    (tmp_path / "settings.yaml").write_text(body)
+    return load_settings(tmp_path)
+
+
+@pytest.fixture
+def settings(tmp_path):
+    return settings_with(tmp_path, f"watchlist: [GME, NKE]\ntracked_managers: [{PERSHING}]\n")
+
+
+@pytest.fixture
+def factory(tmp_path):
+    def make(handler=edgar_handler):
+        return lambda: EdgarClient(
+            TEST_USER_AGENT, tmp_path / "cache", min_interval=0, max_attempts=1,
+            transport=httpx.MockTransport(handler),
+        )  # fmt: skip
+
+    return make
+
+
+def count(session, model) -> int:
+    return session.scalar(select(func.count()).select_from(model))
+
+
+def test_first_pass_runs_every_job_and_stores_filings(db_session, settings, factory):
+    runs = scheduler.run_due(db_session, settings, factory(), now=NOW)
+    assert [(r.job, r.status, r.active) for r in runs] == [
+        ("insider", "succeeded", None),
+        ("beneficial", "succeeded", None),
+        ("institutional", "succeeded", None),
+    ]
+    assert count(db_session, InsiderFiling) > 0 and count(db_session, BeneficialFiling) == 14
+    assert count(db_session, InstitutionalFiling) == 6  # the 2022 filing predates the window
+    insider = runs[0]
+    assert set(insider.detail) == {"GME", "NKE"} and insider.error is None
+    assert insider.detail["NKE"]["stored"] == insider.detail["NKE"]["listed"] > 0
+    assert insider.finished_at is not None
+    audits = db_session.scalars(select(AuditLog).where(AuditLog.action == "job.run")).all()
+    assert [(a.detail["job"], a.detail["status"]) for a in audits] == [
+        ("insider", "succeeded"), ("beneficial", "succeeded"), ("institutional", "succeeded"),
+    ]  # fmt: skip
+
+
+def test_jobs_run_again_only_when_their_interval_has_passed(db_session, settings, factory):
+    scheduler.run_due(db_session, settings, factory(), now=NOW)
+    stored = count(db_session, InsiderFiling)
+    assert scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(minutes=59)) == []
+    later = scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(minutes=61))
+    assert [r.job for r in later] == ["insider"]  # hourly; the others are not due yet
+    assert later[0].detail["NKE"]["stored"] == 0 and count(db_session, InsiderFiling) == stored
+    day = scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(days=1, minutes=1))
+    assert [r.job for r in day] == ["insider", "beneficial", "institutional"]
+    assert count(db_session, JobRun) == 7 and count(db_session, InsiderFiling) == stored
+
+
+def test_a_job_is_not_started_while_another_process_holds_the_ingestion_lock(
+    db_session, settings, factory
+):
+    other = IngestionLock(db_session.get_bind())  # stands in for another worker
+    assert other.acquire(wait=False)
+    try:
+        assert scheduler.run_job(db_session, settings, "insider", factory(), NOW) is None
+        assert count(db_session, InsiderFiling) == 0 and count(db_session, JobRun) == 0
+    finally:
+        other.release()
+    assert scheduler.run_job(db_session, settings, "insider", factory(), NOW).status == "succeeded"
+
+
+def test_a_run_marked_running_without_the_lock_held_is_closed_at_once(
+    db_session, settings, factory
+):
+    """Its process died: whoever runs a job holds the lock, and the lock is free."""
+    db_session.add(JobRun(job="insider", active=True, started_at=NOW, status="running", detail={}))
+    db_session.commit()
+    run = scheduler.run_job(db_session, settings, "insider", factory(), NOW + timedelta(minutes=1))
+    assert run.status == "succeeded"
+    old = db_session.scalars(select(JobRun).order_by(JobRun.id)).first()
+    assert (old.status, old.active) == ("failed", None) and old.error.startswith("abandoned")
+
+
+def test_one_bad_target_does_not_stop_the_others(db_session, tmp_path, factory):
+    settings = settings_with(tmp_path, "watchlist: [GME, NOSUCH, NKE]\n")
+    run = scheduler.run_job(db_session, settings, "beneficial", factory(), NOW)
+    assert run.status == "partial" and run.error == "problems with: NOSUCH"
+    assert "not in SEC's company list" in run.detail["NOSUCH"]["error"]
+    assert run.detail["GME"]["stored"] == 5 and run.detail["NKE"]["stored"] == 9
+    # A partial run still counts as done; the bad target is retried at the normal interval.
+    assert scheduler.next_due(db_session, settings, "beneficial") == NOW + timedelta(minutes=360)
+
+
+def test_failed_filings_make_the_run_partial_and_are_retried(db_session, tmp_path, factory):
+    settings = settings_with(tmp_path, "watchlist: [GME]\n")
+    down = {"on": True}
+
+    def handler(request):
+        if down["on"] and "000092189526002474" in str(request.url):
+            return httpx.Response(200, content=b"<html>Request Rate Threshold Exceeded</html>")
+        return edgar_handler(request)
+
+    run = scheduler.run_job(db_session, settings, "beneficial", factory(handler), NOW)
+    assert run.status == "partial" and list(run.detail["GME"]["failed"]) == ["0000921895-26-002474"]
+    assert count(db_session, BeneficialFiling) == 4
+    down["on"] = False
+    again = scheduler.run_job(
+        db_session, settings, "beneficial", factory(handler), NOW + timedelta(hours=7)
+    )
+    assert (again.status, again.detail["GME"]["stored"], again.detail["GME"]["failed"]) == (
+        "succeeded",
+        1,
+        {},
+    )
+
+
+def test_stored_failure_reasons_never_contain_the_sec_user_agent(
+    db_session, tmp_path, factory, monkeypatch
+):
+    ua = "Jane Example jane.example@example.org"  # made up; example.org is reserved
+    monkeypatch.setenv("SEC_USER_AGENT", ua)
+    from backend.services.beneficial_ownership import ingest as beneficial
+
+    real = beneficial._to_model
+
+    def failing(cik, ref, parsed, filer):  # a parser error that quotes the User-Agent
+        if ref.accession == "0000921895-26-002474":
+            raise beneficial.ScheduleParseError(f"rejected for {ua}")
+        return real(cik, ref, parsed, filer)
+
+    monkeypatch.setattr(beneficial, "_to_model", failing)
+    settings = settings_with(tmp_path, "watchlist: [GME]\n")
+    run = scheduler.run_job(db_session, settings, "beneficial", factory(), NOW)
+    assert run.detail["GME"]["failed"] == {"0000921895-26-002474": "rejected for ***"}
+    stored = db_session.get(JobRun, run.id)
+    assert "example.org" not in json.dumps(stored.detail) + (stored.error or "")
+
+
+def test_total_failure_is_recorded_and_retried_sooner(db_session, settings, factory):
+    def unconfigured():
+        raise EdgarNotConfigured("SEC_USER_AGENT must be set to a name and contact email")
+
+    run = scheduler.run_job(db_session, settings, "insider", unconfigured, NOW)
+    assert (run.status, run.active, run.detail) == ("failed", None, {})
+    assert "EdgarNotConfigured: SEC_USER_AGENT" in run.error
+    assert scheduler.next_due(db_session, settings, "insider") == NOW + timedelta(minutes=15)
+    assert (
+        scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(minutes=14)) != []
+    )  # others
+    retry = scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(minutes=16))
+    assert [(r.job, r.status) for r in retry] == [("insider", "succeeded")]
+
+
+def test_sec_outage_fails_the_run_and_stores_nothing(db_session, settings, factory):
+    down = factory(lambda request: httpx.Response(503))
+    outage = scheduler.run_job(db_session, settings, "beneficial", down, NOW)
+    assert outage.status == "failed" and set(outage.detail) == {"GME", "NKE"}
+    assert "failed after 1 attempts" in outage.detail["GME"]["error"]
+    assert count(db_session, BeneficialFiling) == 0
+    recovered = scheduler.run_job(
+        db_session, settings, "beneficial", factory(), NOW + timedelta(minutes=16)
+    )
+    assert recovered.status == "succeeded" and count(db_session, BeneficialFiling) == 14
+
+
+def test_disabled_schedule_runs_nothing_unless_forced(db_session, tmp_path, factory):
+    settings = settings_with(tmp_path, "watchlist: [GME]\ningestion:\n  enabled: false\n")
+    assert scheduler.run_due(db_session, settings, factory(), now=NOW) == []
+    forced = scheduler.run_due(db_session, settings, factory(), force="beneficial", now=NOW)
+    assert [(r.job, r.status) for r in forced] == [("beneficial", "succeeded")]
+
+
+def test_schedule_settings_are_validated(tmp_path):
+    from pydantic import ValidationError
+
+    for bad in ("ingestion:\n  insider_every_minutes: 0\n", "ingestion:\n  every: 5\n"):
+        with pytest.raises(ValidationError):
+            settings_with(tmp_path, bad)
+    defaults = load_settings(tmp_path / "missing").app.ingestion
+    assert (defaults.insider_every_minutes, defaults.institutional_every_minutes) == (60, 1440)
+
+
+def test_api_reports_runs_failures_and_what_is_due(tmp_path, monkeypatch, factory):
+    monkeypatch.setenv("API_AUTH_TOKEN", "test-token")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/api.sqlite")
+    (tmp_path / "settings.yaml").write_text("watchlist: [GME, NOSUCH]\n")
+    app = create_app(load_settings(tmp_path))
+    auth = {"Authorization": "Bearer test-token"}
+    with TestClient(app) as client:
+        fresh = client.get("/api/v1/jobs", headers=auth).json()
+        assert fresh["enabled"] is True and fresh["recent_runs"] == []
+        assert fresh["jobs"]["insider"] == {
+            "every_minutes": 60,
+            "targets": 2,
+            "last_run": None,
+            "next_due": "now",
+        }
+        with app.state.sessions() as session:
+            scheduler.run_job(session, app.state.settings, "beneficial", factory(), NOW)
+        body = client.get("/api/v1/jobs", headers=auth).json()
+        last = body["jobs"]["beneficial"]["last_run"]
+        assert (last["status"], last["error"]) == ("partial", "problems with: NOSUCH")
+        assert body["jobs"]["beneficial"]["next_due"] == (NOW + timedelta(minutes=360)).isoformat()
+        assert (
+            len(body["recent_runs"]) == 1
+            and body["recent_runs"][0]["targets"]["GME"]["stored"] == 5
+        )
+        assert client.get("/api/v1/jobs").status_code == 401
+        assert client.get("/api/v1/jobs", params={"history": 999}, headers=auth).status_code == 422
+
+
+# --- running continuously (review of PR #2) ---
+
+
+class OtherProcessFirst:
+    """A real client whose first document fetch first lets another process store everything,
+    as when a manual ingest or a second worker runs at the same time as this one."""
+
+    DOCUMENTS = ("primary_xml", "ownership_xml", "submission_text", "filing_header")
+
+    def __init__(self, client, before):
+        self._client, self._before = client, before
+
+    def __getattr__(self, name):
+        if name in self.DOCUMENTS and self._before:
+            before, self._before = self._before, None
+            before()
+        return getattr(self._client, name)
+
+
+@pytest.mark.parametrize(
+    ("job", "model"),
+    [
+        ("insider", InsiderFiling),
+        ("beneficial", BeneficialFiling),
+        ("institutional", InstitutionalFiling),
+    ],
+)
+def test_filings_stored_meanwhile_by_another_process_are_not_an_error(
+    db_session, settings, factory, job, model
+):
+    _, targets, ingest = scheduler.job_table(settings)[job]
+
+    def other_process():
+        with sessionmaker(db_session.get_bind())() as other:
+            client = factory()()
+            for target in targets:
+                ingest(other, client, target)
+            client.close()
+
+    run = scheduler.run_job(
+        db_session, settings, job, lambda: OtherProcessFirst(factory()(), other_process), NOW
+    )
+    assert (run.status, run.error) == ("succeeded", None)
+    assert not any(r.get("reclassified") for r in run.detail.values())  # nothing was replaced
+    alone = scheduler.run_job(db_session, settings, job, factory(), NOW + timedelta(days=2))
+    assert alone.status == "succeeded"
+    assert all(r["stored"] == 0 for r in alone.detail.values())  # nothing was missed
+    assert count(db_session, model) > 0
+
+
+def test_an_unexpected_error_in_one_target_does_not_stop_the_others(
+    db_session, settings, factory, monkeypatch
+):
+    real = scheduler.insider.ingest_issuer
+
+    def broken_for_gme(session, client, ticker, since):
+        if ticker == "GME":
+            raise KeyError("reportingOwner")  # a parser bug on one odd filing
+        return real(session, client, ticker, since)
+
+    monkeypatch.setattr(scheduler.insider, "ingest_issuer", broken_for_gme)
+    run = scheduler.run_job(db_session, settings, "insider", factory(), NOW)
+    assert (run.status, run.active) == ("partial", None)
+    assert run.detail["GME"]["error"] == "KeyError: 'reportingOwner'"
+    assert run.detail["NKE"]["stored"] > 0
+
+
+def test_shutdown_closes_the_run_between_targets_and_it_is_retried_soon(
+    db_session, settings, factory, monkeypatch
+):
+    stop = threading.Event()
+    real = scheduler.beneficial.ingest_issuer
+
+    def then_shutdown(*args):
+        report = real(*args)
+        stop.set()  # SIGTERM arrives while the first target is being ingested
+        return report
+
+    monkeypatch.setattr(scheduler.beneficial, "ingest_issuer", then_shutdown)
+    run = scheduler.run_job(db_session, settings, "beneficial", factory(), NOW, stop=stop)
+    assert (run.status, run.active, set(run.detail)) == ("interrupted", None, {"GME"})
+    assert run.error == "interrupted by shutdown before: NKE"
+    # Not left "running" (that would block the job until the stale limit); retried soon.
+    assert scheduler.next_due(db_session, settings, "beneficial") == NOW + timedelta(minutes=15)
+
+    # The restarted worker picks it up at that time and finishes every target.
+    monkeypatch.setattr(scheduler.beneficial, "ingest_issuer", real)
+    early = scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(minutes=14))
+    assert "beneficial" not in [r.job for r in early]  # the other jobs had never run: due
+    (retry,) = scheduler.run_due(db_session, settings, factory(), now=NOW + timedelta(minutes=16))
+    assert (retry.job, retry.status, retry.error) == ("beneficial", "succeeded", None)
+    assert retry.detail["GME"] == {"listed": 5, "stored": 0, "already_stored": 5, "failed": {}}
+    assert retry.detail["NKE"]["stored"] == 9
+    assert db_session.scalar(select(func.count()).where(JobRun.active.is_(True))) == 0
+
+
+def test_worker_loop_survives_a_failing_pass(db_session, tmp_path, factory, monkeypatch):
+    settings = settings_with(tmp_path, "watchlist: [GME]\ningestion:\n  poll_seconds: 1\n")
+    stop, passes = threading.Event(), []
+
+    def flaky(session, settings, client_factory, force=None, stop=None, **_):
+        passes.append(1)
+        if len(passes) == 1:
+            raise OperationalError("SELECT 1", {}, Exception("database restarting"))
+        stop.set()
+        return []
+
+    monkeypatch.setattr(scheduler, "run_due", flaky)
+    scheduler.serve(sessionmaker(db_session.get_bind()), settings, factory(), stop)
+    assert len(passes) == 2  # the first pass failed; the worker carried on

@@ -48,7 +48,7 @@ class _Setup:
 
 def _reversal_setups(zz: list[Swing], atr: float, j: int) -> list[_Setup]:
     """Double/triple tops and bottoms and (inverse) head and shoulders ending at the last swing."""
-    setups = []
+    setups: list[_Setup] = []
     if len(zz) < 3:
         return setups
     last = zz[-1]
@@ -186,7 +186,7 @@ def _converging(df: pd.DataFrame, zz: list[Swing], atr: float, j: int) -> Detect
         ("rising", "rising"): ("rising_wedge", "bearish"),
         ("falling", "falling"): ("falling_wedge", "bullish"),
     }.get((shape(drift_h), shape(drift_l)), (None, None))
-    if name is None:
+    if name is None or direction is None:
         return None
     upper, lower = hs * j + hi, ls * j + li
     detection = Detection(
@@ -340,11 +340,11 @@ def detect_chart_patterns(df: pd.DataFrame, swings: list[Swing]) -> list[Detecti
         cups = waiting
 
         still = []
-        for done, rim, depth in handles:
-            pullback = max(rim, h[done : j + 1].max()) - l[done : j + 1].min()
+        for done, rim_price, depth in handles:
+            pullback = max(rim_price, h[done : j + 1].max()) - l[done : j + 1].min()
             if j - done > 25 or pullback > depth / 2:
                 continue
-            ceiling = max(rim, h[done:j].max()) if j > done else rim
+            ceiling = max(rim_price, h[done:j].max()) if j > done else rim_price
             if j - done >= 3 and c[j] > ceiling and 0.5 * atr <= pullback <= depth / 3:
                 detection = Detection(
                     "cup_and_handle",
@@ -352,7 +352,7 @@ def detect_chart_patterns(df: pd.DataFrame, swings: list[Swing]) -> list[Detecti
                     "bullish",
                     df.index[j].to_pydatetime(),
                     0.6,
-                    f"A rounded bottom to {rim:.2f}, a {pullback / atr:.1f} ATR pullback, "
+                    f"A rounded bottom to {rim_price:.2f}, a {pullback / atr:.1f} ATR pullback, "
                     f"then a close at {c[j]:.2f} "
                     f"above {ceiling:.2f}{volume_note}.",
                 )
@@ -365,7 +365,7 @@ def detect_chart_patterns(df: pd.DataFrame, swings: list[Swing]) -> list[Detecti
                     )
                 )
             else:
-                still.append((done, rim, depth))
+                still.append((done, rim_price, depth))
         handles = still
 
         if j >= DONCHIAN and j - last_break > 5 and rel_volume[j] >= 1.5:

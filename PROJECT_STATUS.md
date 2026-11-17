@@ -1,6 +1,6 @@
 # AI Trading Platform — Project Status
 
-Last updated: 2026-11-13 · Complete and verified: **1, 4** · Built, live verification pending: **2** · Built, unverified on real data: **3** · Half done and verified: **5** (13F holdings; options flow not started)
+Last updated: 2026-11-14 · Complete and verified on real data: **1, 4**, and the SEC half of **5** (13F, 13D, 13G), plus scheduled ingestion · Built, live verification pending: **2** · Built, unverified on real data: **3** · Not started: options flow (needs a paid provider), 6 to 10
 
 Milestone 4 (insider filings) was done before Milestone 2 (market data) at the owner's request,
 because SEC EDGAR needs no API key and could be verified against real data immediately.
@@ -90,7 +90,7 @@ the one thing blocking verification of M2, and are needed again for M7.
 - [~] **M2 Market data** — built and unit-tested; **verification against live Alpaca is pending API keys**
 - [~] **M3 Technical analysis** — built and tested on constructed price series; **not yet run on real market data** (waits on M2)
 - [x] **M4 Insider intelligence** — EDGAR client, Forms 3/4/5 parsing, classification, scoring, history
-- [~] **M5 Institutional + options** — 13F holdings, changes and scoring done and verified on real filings; 13D/13G and options flow not started
+- [~] **M5 Institutional + options** — 13F holdings and Schedules 13D/13G done and verified on real filings; options flow not started (needs a paid data provider)
 - [ ] **M6 AI engine** — features, models, regime detection, opportunity score, explanations
 - [ ] **M7 Risk + execution** — position sizing, hard limits, kill switch, paper broker adapters
 - [ ] **M8 Backtesting** — fees, slippage, walk-forward, Monte Carlo, benchmarks
@@ -109,11 +109,29 @@ the one thing blocking verification of M2, and are needed again for M7.
 | Startup/shutdown audit, graceful shutdown | `backend/main.py` | test; `audit_log` rows observed in Postgres |
 | Docker stack (API + TimescaleDB) | `docker-compose.platform.yml`, `docker/Dockerfile.platform` | built and run; see caveat |
 
-Docker verification, repeated on 2026-11-13 with all code through Milestone 3: the stack starts
-on TimescaleDB, creates all six tables, answers on every endpoint, and the full test suite passes
-inside the image (Python 3.12, TA-Lib from its binary wheel). Caveat: the development sandbox intercepts TLS, so the image was
-built from a temporary copy of the Dockerfile with two extra lines trusting the sandbox CA. The
-committed Dockerfile is otherwise identical but has not itself been built on a normal network.
+Docker verification, repeated on 2026-11-14 with all code through Milestone 5: the image was built
+from the committed `docker/Dockerfile.platform`, unmodified. The stack (database, API, worker)
+starts on TimescaleDB and creates all 13 tables; every endpoint answers; and inside the image
+(Python 3.12) the full test suite passes and the type check is clean.
+
+How it was built here, and what that leaves unproven: the development sandbox intercepts TLS, so
+`pip` inside a build cannot verify PyPI. Rather than alter the Dockerfile, the base image tag
+`python:3.12-slim` was pointed at a local copy of the official image with the sandbox's
+certificate added, and the build used host networking to reach the sandbox proxy. On a normal
+network neither is needed: on 2026-11-15 the `docker` job of `platform-ci.yml` built the committed
+Dockerfile on a GitHub runner with no workarounds and ran the tests inside the image (374 passed).
+The full compose stack (database, API, worker together) has still only been started in the sandbox. Containers in the sandbox have
+no route to sec.gov, so the worker's runs there ended as recorded failures, which is the designed
+behaviour; scheduled ingestion against live EDGAR was verified outside the container.
+
+Checks that now gate every change: `pytest` (374 tests), `ruff check` and `ruff format`, and
+`mypy --config-file backend/mypy.ini backend` (0 errors; it reported 91 when first run, all fixed).
+
+CI: `.github/workflows/platform-ci.yml` runs those checks on every pull request that touches the
+platform, plus a plain `docker build` of the committed Dockerfile and the test suite inside the
+image. First run 2026-11-15 on PR #2: both jobs passed. Upstream's pre-commit hooks also run on
+pull requests; they skip `backend/tests/fixtures/` (real filings must stay byte-for-byte) and leave
+type-checking of `backend/` to the platform's own mypy configuration.
 
 ## 5a. Milestone 4 — insider intelligence (complete, with stated limits)
 
@@ -212,8 +230,7 @@ If an ingestion run cannot store a filing, the count is kept on the issuer, retu
 
 ### Not done in this milestone
 
-- Forms 13D, 13G and 13F: Milestone 5.
-- Scheduled or continuous ingestion and alerts: ingestion is a manual command today.
+- Alerts on new insider activity. (Forms 13D/13G/13F and scheduled ingestion are done: see 5d to 5f.)
 - Filings before mid-2003 have no structured document; they are counted in the ingest report
   (`without XML`) and not parsed.
 
@@ -459,9 +476,203 @@ Reproduce: `python -m backend.services.institutional_analysis.verify <data set>.
 
 ### Not done
 
-- Forms 13D and 13G (large individual stakes).
-- Options flow: needs a paid provider (Polygon or Tradier).
-- Scheduled ingestion; like insider data, 13F ingestion is a manual command.
+- Options flow: needs a paid provider (Polygon or Tradier). This is the only part of Milestone 5 left.
+
+## 5e. Milestone 5, part 2 — Schedules 13D and 13G (complete, with stated limits)
+
+### 13D and 13G are different statements
+
+| | Schedule 13D | Schedule 13G |
+|---|---|---|
+| Who files | A holder above 5% who has, or may have, the purpose of influencing or controlling the company | A passive holder above 5%: institutions and passive investors |
+| What it says | The stake and the purpose of the transaction (Item 4) | The stake and the rule relied on; nothing about intent |
+| How fresh | Amended promptly on material changes | Mostly updated quarterly or yearly |
+
+Every record carries its schedule and a plain-language meaning, and the API can filter on it.
+A holder who moves from 13G to 13D is flagged, since that is a statement of changed intent.
+
+### What exists
+
+| Component | Location |
+|---|---|
+| Parser for structured SCHEDULE 13D, 13D/A, 13G, 13G/A (both schema layouts) and for EDGAR's filing header | `backend/services/beneficial_ownership/parser.py` |
+| Ingestion per issuer, idempotent and audited | `backend/services/beneficial_ownership/ingest.py` |
+| History, each holder's latest position, and changes between a holder's filings | `backend/services/beneficial_ownership/history.py` |
+| Tables `beneficial_issuer`, `beneficial_filing`, `beneficial_owner` | `backend/models/beneficial.py` |
+| `GET /api/v1/ownership/{ticker}/holders`, `GET /api/v1/ownership/{ticker}/filings` (both take `as_of` and `schedule`) | `backend/api/ownership.py` |
+
+Stored per filing: schedule, form, amendment number, event date, filing date, public-availability
+time, security and CUSIP, who filed it, the rule (13G) or purpose text (13D), every reporting
+person with shares, percentage of the class and voting/dispositive powers, and a link to the filing.
+
+### Rules that came from the real filings
+
+- **Structured data starts in December 2024.** Earlier filings ("SC 13D", "SC 13G") are free-form
+  documents. They are kept as dated history entries with the filer's name, taken from EDGAR's own
+  header, and with shares and percentage marked unknown. Their numbers are not guessed.
+- **A company's index mixes two things**: stakes others hold in it, and stakes it holds in others.
+  One of Intel's entries is Intel reporting its MariaDB stake. Structured filings are matched on
+  the issuer in the document, free-form ones on the subject company in EDGAR's header.
+- **Persons on one filing are not added up.** A fund, its adviser and its owner each report the
+  same shares. The largest reporting person stands for the filing.
+- **Share changes and percentage changes are separate facts.** Between two of Ryan Cohen's
+  GameStop amendments the share count stayed at 42,082,626 while the stake fell from 9.3% to 8.3%,
+  because the share class grew. Each change reports both, with a note when only one moved, and
+  a note when shares jump but the percentage does not (a split or share-class change).
+- **Holders are followed by name.** The account a filing is submitted under varies (the person, a
+  fund vehicle, a law firm), so a holder's history is linked by the reporting person's name.
+- A filing reporting less than 5% is kept and marked as an exit below the threshold.
+
+### Verification performed (2026-11-14)
+
+| Check | Result |
+|---|---|
+| Real ingestion of 16 issuers since November 2023 | 320 filings stored (197 structured, 123 free-form), 0 failures, 15 filings about other companies skipped |
+| Parser vs an independent text extraction of the same documents (SEC publishes no bulk 13D/13G data set to compare against) | 208 of 208 structured filings and all 407 reporting persons agree on names, shares, percentages, issuer, CUSIP, form and amendment number |
+| Automated tests | 28 tests on 16 real documents stored unmodified |
+
+### Limits
+
+- **Delayed and as of an event date.** Never the holder's position today. A 13G in particular can
+  be a year old.
+- **Percentages are the filer's own.** They are not recomputed, and different filers may use
+  different share counts for the same class.
+- **Name linking** treats "The Vanguard Group" and "VANGUARD GROUP INC" as different holders, and
+  would merge two different holders with identical names.
+- **No history of figures before December 2024**, only the fact and date of each filing.
+- Only the first CUSIP is stored when a filing lists several.
+
+## 5f. Scheduled ingestion (complete)
+
+`python -m backend.services.scheduler` runs as a loop (the `worker` service in the compose file),
+or once with `--once` for cron. Three jobs, each with its own interval in `config/settings.yaml`
+under `ingestion`: `insider` (Forms 3/4/5 for the `watchlist`, hourly), `beneficial` (13D/13G for
+the `watchlist`, every six hours), `institutional` (13F for `tracked_managers`, daily).
+
+| Requirement | How it is met |
+|---|---|
+| Safe to run repeatedly | Ingestion skips filings already stored; a second pass stores nothing and makes no requests for them |
+| Duplicate protection | Every process that contacts SEC holds the SEC ingestion lock (section 5h), so two workers never run at once. A run still marked running when a process takes the lock belonged to a process that died, and is closed as abandoned at once. A unique constraint on running rows is a second guard |
+| Retries | Each request retries with backoff; a failed job is tried again after `retry_after_minutes`; filings that failed are retried on the next run |
+| Failure reporting | Every run is stored in `job_run` with per-target results and an error summary, written to the audit log, logged, and served by `GET /api/v1/jobs` with what is due next |
+| One bad target | Does not stop the others, whatever the error (an unexpected one is logged with its traceback); the run is recorded as `partial` |
+| Another process storing the same filings | A manual ingest or second worker storing a filing first is counted as already stored, not as an error (any other constraint failure is still raised) |
+| Graceful stop | On SIGTERM the worker finishes the current target, records the run as `interrupted` with the targets it did not reach, and exits; an interrupted run is retried after `retry_after_minutes`. The compose file gives the worker 2 minutes to stop |
+| Database or other failure in a pass | Logged; the worker tries again at the next poll instead of exiting. A lost lock connection ends the run after the current target as `interrupted` |
+| Health | `GET /api/v1/health/ingestion` (section 5h) |
+| Run history | Kept 90 days (`run_history_days`), except each job's latest run, success and failure (section 5h) |
+
+Verified: 15 tests, 17 cases (clock-controlled, on the real SEC fixtures), the reliability tests of
+section 5h, and a live run against EDGAR for
+5 watchlist tickers and 14 managers (all three jobs succeeded; an immediate second pass ran
+nothing).
+
+Review of 2026-11-16 (continuous running). Each defect below was first reproduced by a test that
+failed on the unfixed code:
+
+- A filing stored by another process between listing and storing (a manual ingest during a
+  worker run) raised a uniqueness error that failed the whole 13D/13G or 13F job. Insider
+  ingestion avoided the error only by deleting and re-inserting the other process's row, counted
+  as a re-classification. All three now count it as already stored.
+- An unexpected error on one target (anything but an SEC or data error) failed the whole job and
+  skipped every later target, on every run.
+- Stopping the worker left its run marked "running", so the job did not run again until the
+  stale limit (3 hours by default). Docker's default 10-second stop also killed it mid-target.
+- Any exception in a scheduler pass (for example the database restarting) ended the worker.
+- In the 13D/13G API, `schedule=13G` was applied before working out each holder's latest filing,
+  so a holder that had moved from 13G to 13D was still listed as a passive 13G holder.
+
+The three limits that review left open (a lock judged by age, SEC request spacing per process, and
+no retention) were fixed on 2026-11-16; see section 5h.
+
+Not done: notifications when a run fails. Failures are recorded, logged and reported by the
+health endpoint, which any monitor can watch; no email or chat integration exists yet.
+
+## 5h. Unattended running: SEC lock, health, retention, API security (complete)
+
+Approved by the owner on 2026-11-16 after a proposal with tradeoffs. Every issue below was first
+reproduced on the unfixed code: two processes together sent 16 SEC requests in one second
+(limit 10); after `kill -9` a job stayed blocked for 3 hours; production started with the token
+`change-me` and served `/docs`; there was no ingestion health check.
+
+**One SEC ingestion lock** (`backend/database/locks.py`). The worker, the three ingest commands
+and the two verify commands all take it before contacting SEC, and `EdgarClient` refuses to send
+a real request unless the process holds it, so no entry point can bypass it.
+- Only one process talks to SEC at a time, so the combined rate is one process's (8 requests a
+  second, under SEC's 10), and two workers never run jobs at once.
+- PostgreSQL: a session advisory lock on its own connection. The server drops it when the
+  connection ends, so a crashed or killed process frees it at once (measured: 0.2 to 0.3 s after
+  `kill -9` or `docker kill`). TCP keepalives on both sides (`make_engine`, and the `db` service's
+  command in the compose file) end the connection of a host that vanished within about a minute.
+- SQLite, local development only: an OS lock on `<database file>.ingest-lock` (`fcntl` on Linux
+  and macOS, `msvcrt` on Windows), released by the OS when the process ends. It coordinates
+  processes on one machine using the same file; network file systems may not honour it.
+- The worker takes the lock per pass and skips a pass while another process holds it. The
+  commands wait, saying why, or exit with `--no-wait` (status 1). `scheduler --once` behaves like
+  the commands.
+- The age-based takeover and its `stale_after_minutes` setting are gone: a run marked running
+  when a process takes the lock is closed at once as abandoned, and a long run can never be taken
+  over while its process lives. The worker checks the lock between targets; if its connection
+  was lost, the run ends as `interrupted`, naming the targets not reached, and is retried after
+  `retry_after_minutes`. Within one target nothing checks: if the database restarted mid-target,
+  a second process could start before the first notices. Ingestion tolerates duplicates, so data
+  stays correct, but SEC traffic could briefly double.
+
+**Ingestion health:** `GET /api/v1/health/ingestion` (needs the token). Per job: last run, last
+success, last failure with its error, the running run, whether the last run was interrupted,
+next due time and whether it is overdue (not started 30 minutes after it was due). Also the
+database, whether a process holds the lock now (PostgreSQL only), and a list of problems.
+HTTP 503 and `unhealthy` when the database is unreachable, a job's last run failed or a job is
+overdue (the scheduler is then reported `stalled`); `degraded` (200) when a run was partial or
+interrupted, or a job has never run; `disabled` when ingestion is off. No notification channel is
+connected yet; a monitor, or a future notifier, reads this endpoint (`scheduler.ingestion_health`).
+
+**Retention.** Eligible for deletion, and only this: rows of `job_run` (a run's per-target counts
+and error text) that finished more than `run_history_days` (90) ago, except each job's latest run
+(it decides when the job is next due), latest success and latest failure (the health check shows
+them). Running rows are never touched. Never deleted: `audit_log` (kept indefinitely; it keeps a
+summary of every run: job, status, target count and which targets had problems), and every
+filing, holding, transaction, owner, issuer, manager and price table. Checked before
+implementing: nothing references `job_run`; only `next_due`, the jobs and health endpoints read
+it. After 90 days a run's per-target error text is gone; its audit summary remains. Pruning runs
+at the end of each worker pass that ran jobs and is itself written to the audit log.
+
+**API security.**
+- Outside development the API refuses to start without a token, or with a placeholder
+  (`change-me` and similar, in any case). In production the token must also be at least 32
+  characters with at least 8 distinct ones. Error messages never include the token.
+- `/docs`, `/redoc` and `/openapi.json` exist in development only.
+- Error text stored for job runs (and so served by the jobs and health endpoints) is redacted
+  like the logs: secret values and passwords in connection URLs become `***`.
+  `POSTGRES_PASSWORD` is now redacted too.
+- `SEC_USER_AGENT` (the operator's name and contact email) is redacted the same way, and its
+  email address on its own as well, in: logs (both formatters), stored job errors and per-filing
+  failure reasons (redacted where they are recorded), API responses, the ingest and verify
+  commands' printed output, and tracebacks of uncaught errors (`setup_logging` installs a
+  redacting `sys.excepthook`). Regression tests cover each place (`test_foundation.py`,
+  `test_scheduler.py`); the value is never stored in the database.
+- The compose file publishes the API on `127.0.0.1` only and does not publish the database or the
+  worker; a test fails if that changes. There is no remote access or public deployment.
+
+**Backups (deferred to M10; requirements only).** See section 6.
+
+Verified (2026-11-16): reliability tests, 26 functions: 36 cases pass on SQLite (1 needs
+PostgreSQL), 45 pass with PostgreSQL. They use real child processes, killed with SIGKILL where
+the test says so, and cover the lock (second process refused, freed on kill, waiting, `--no-wait`,
+a lost connection), every SEC command run as its own process while the lock is held, the
+combined rate across two processes (at most 8 requests in any second with the lock; more than 10
+without it), the worker skipping a pass, a killed worker's run closed and redone a minute later,
+a lost lock stopping a run, the health endpoint (healthy, failed, interrupted and running,
+overdue, never run, database down, token required), retention (only eligible rows go; every
+research table's row count unchanged), production token rules, docs gating, credentials absent
+from every response, and the compose file. Full suite: 417 passed on SQLite (11 skipped), 426
+with PostgreSQL (10 skipped). In the sandbox Docker stack, in production mode: keepalives active
+(`tcp_keepalives_idle=30`, from the command line); a manual ingest beside the worker exited with
+status 1 and the message; `docker kill` of the worker freed the lock in 291 ms and the restarted
+worker closed the dead run as abandoned at once; `docker compose stop` recorded the run as
+interrupted in 4 s; health answered 503 naming the failed, interrupted and never-run jobs;
+`/docs` and `/openapi.json` answered 404; no log line contained the token or the database
+password.
 
 ## 6. Known shortcuts and deferred items
 
@@ -475,4 +686,10 @@ Reproduce: `python -m backend.services.institutional_analysis.verify <data set>.
   exposing the API beyond localhost, move it to a shared store or a reverse proxy.
 - Uvicorn's own access log lines are plain text, not JSON (they contain no secrets).
 - Single shared bearer token rather than user accounts; revisit with the dashboard (M9).
-- No database backup job yet; add with deployment docs (M10).
+- Backups are deferred to M10. Requirements: a nightly `pg_dump --format=custom` of the platform
+  database kept off the database host, at least 14 daily and 8 weekly copies; a restore drill
+  at least quarterly that restores into a fresh database and checks row counts; later,
+  continuous archiving for point-in-time recovery. Most research data can be re-ingested from
+  SEC with its original publication times (the EDGAR cache volume speeds that up); the audit log
+  and run history cannot, so they are what backups chiefly protect. The tested restore procedure
+  is in section 7 (in #3).

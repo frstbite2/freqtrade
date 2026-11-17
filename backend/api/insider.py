@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.api.routes import require_token
+from backend.core.checks import need
 from backend.models.insider import InsiderIssuer
 from backend.services.insider_intelligence.history import effective_transactions, filings_as_of
 from backend.services.insider_intelligence.scoring import (
@@ -49,7 +50,8 @@ def _as_of(value: datetime | None) -> datetime:
 @router.get("/{ticker}/score")
 def score(request: Request, ticker: Ticker, as_of: AsOf = None) -> dict:
     with request.app.state.sessions() as session:
-        return score_issuer(session, _issuer(session, ticker).cik, _as_of(as_of))
+        issuer = _issuer(session, ticker)  # 404 if never ingested, so a score always exists
+        return need(score_issuer(session, issuer.cik, _as_of(as_of)), "score")
 
 
 @router.get("/{ticker}/transactions")
