@@ -1,12 +1,12 @@
 "use client";
 
-import { Activity as ActivityIcon, ChevronRight, FileText, Radar, ShieldAlert, Waves, Zap } from "lucide-react";
+import { Activity as ActivityIcon, Building2, ChevronRight, ExternalLink, FileText, Radar, ShieldAlert, Waves, Zap } from "lucide-react";
 import { useState } from "react";
 import { DemoBadge } from "@/components/ui/badges";
 import { SectionHeader } from "@/components/ui/section";
 import { EmptyState } from "@/components/ui/states";
 import { useDataMode } from "@/lib/data-mode";
-import { utcDateTime, utcTime } from "@/lib/format";
+import { utcDate, utcDateTime, utcTime } from "@/lib/format";
 import { ACTIVITY, type Activity, type ActivityKind } from "@/lib/sample-data";
 
 const KIND: Record<ActivityKind, { icon: typeof Zap; color: string; label: string }> = {
@@ -15,6 +15,7 @@ const KIND: Record<ActivityKind, { icon: typeof Zap; color: string; label: strin
   risk: { icon: ShieldAlert, color: "#ff5c7a", label: "Risk" },
   whale: { icon: Waves, color: "#a46bff", label: "Whale" },
   system: { icon: Radar, color: "#36e3a1", label: "System" },
+  ownership: { icon: Building2, color: "#6e7bff", label: "13D/13G" },
 };
 
 const FILTERS: { id: "all" | ActivityKind; label: string }[] = [
@@ -69,7 +70,8 @@ export function ActivityFeed({ limit }: { limit?: number }) {
   );
 }
 
-function Item({ a, open, onToggle, index }: { a: Activity; open: boolean; onToggle: () => void; index: number }) {
+/** One feed row. Real items pass `url`, the SEC filing they came from. */
+export function Item({ a, open, onToggle, index }: { a: Activity & { url?: string }; open: boolean; onToggle: () => void; index: number }) {
   const k = KIND[a.kind];
   const Icon = k.icon;
   return (
@@ -91,7 +93,7 @@ function Item({ a, open, onToggle, index }: { a: Activity; open: boolean; onTogg
               <span className="text-ink-3">: </span>
               {a.title}
             </span>
-            <span className="tabular shrink-0 text-[11px] text-ink-3">{utcTime(a.time)}</span>
+            <span className="tabular shrink-0 text-[11px] text-ink-3">{a.url ? utcDate(a.time) : utcTime(a.time)}</span>
           </span>
           <span className="mt-0.5 block truncate text-xs text-ink-3">{a.source}</span>
         </span>
@@ -118,6 +120,11 @@ function Item({ a, open, onToggle, index }: { a: Activity; open: boolean; onTogg
             <p className="text-ink-3">
               {k.label} · {utcDateTime(a.time)} · {a.source}
             </p>
+            {a.url && (
+              <a href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-ink-2 hover:text-ink">
+                View the filing on SEC.gov <ExternalLink className="size-3" aria-hidden />
+              </a>
+            )}
           </div>
         </div>
       </div>

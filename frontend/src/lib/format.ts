@@ -51,6 +51,11 @@ export function utcTime(iso: string): string {
   }).format(new Date(iso)) + " UTC";
 }
 
+/** "Nov 12": the date alone, in UTC. */
+export function utcDate(iso: string): string {
+  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(iso));
+}
+
 export function utcDateTime(iso: string): string {
   return new Intl.DateTimeFormat(LOCALE, {
     month: "short",
@@ -66,4 +71,14 @@ export type Trend = "up" | "down" | "flat";
 
 export function trendOf(value: number): Trend {
   return value > 0 ? "up" : value < 0 ? "down" : "flat";
+}
+
+/** "5 min ago", "3 days ago": how fresh a real record is. Needs the current time from the caller. */
+export function ago(iso: string, now: number): string {
+  const minutes = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} days ago`;
 }

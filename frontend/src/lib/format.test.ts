@@ -1,7 +1,7 @@
 // Pure formatting checks; no data.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { price, signedPct, signedUsd, usd, utcTime } from "./format.ts";
+import { ago, price, signedPct, signedUsd, usd, utcTime } from "./format.ts";
 
 test("money and percentages carry their sign", () => {
   assert.equal(usd(1234.5), "$1,234.50");
@@ -22,4 +22,12 @@ test("sub-cent prices keep significant digits", () => {
   assert.equal(price(0.0000241), "$0.0000241");
   assert.equal(price(0.5), "$0.5000");
   assert.equal(price(186.4), "$186.40");
+});
+
+test("ago reads naturally and never goes negative", () => {
+  const now = Date.parse("2026-11-17T01:00:00Z");
+  assert.equal(ago("2026-11-17T01:00:20Z", now), "just now");
+  assert.equal(ago("2026-11-17T00:15:00Z", now), "45 min ago");
+  assert.equal(ago("2026-11-16T15:00:00Z", now), "10 h ago");
+  assert.equal(ago("2026-11-14T17:09:24Z", now), "2 days ago");
 });

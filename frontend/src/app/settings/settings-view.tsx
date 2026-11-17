@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SectionHeader } from "@/components/ui/section";
 import { useDataMode } from "@/lib/data-mode";
 import { WalletPermissions } from "@/components/wallet/wallet-permissions";
+import { PipelineHealth } from "@/components/sec/pipeline-health";
 
 export function SettingsView() {
   const { mode } = useDataMode();
@@ -22,6 +23,7 @@ export function SettingsView() {
           </div>
         </section>
         <SourceStatus />
+        <PipelineHealth />
         <section className="card p-5 sm:p-6 xl:col-span-2">
           <SectionHeader title="Security" />
           <ul className="grid gap-3 sm:grid-cols-3">

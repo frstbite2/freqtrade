@@ -9,6 +9,8 @@ import { StatGrid } from "@/components/dashboard/stat-grid";
 import { StrategyComparison } from "@/components/dashboard/strategy-comparison";
 import { SectionHeader } from "@/components/ui/section";
 import { WalletCard } from "@/components/wallet/wallet-card";
+import { PipelineHealth } from "@/components/sec/pipeline-health";
+import { SecDisclosures } from "@/components/sec/sec-disclosures";
 
 export default function DashboardPage() {
   return (
@@ -22,6 +24,11 @@ export default function DashboardPage() {
         <h2 id="bots-heading" className="sr-only">AI bots</h2>
         <BotGrid />
       </section>
+
+      <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
+        <SecDisclosures />
+        <PipelineHealth />
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
         <PortfolioPanel />

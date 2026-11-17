@@ -6,32 +6,36 @@ import { useEffect, useState } from "react";
 export type Remote<T> =
   | { state: "loading" }
   | { state: "ok"; data: T }
-  | { state: "unavailable"; status: number; message: string }
+  /** The backend answered with an error. `body` is kept: some errors (a 503 health report) carry data. */
+  | { state: "unavailable"; status: number; message: string; body: unknown }
   | { state: "offline" };
 
 /** GET /api/platform/<path>. Never talks to the backend directly, so no secret is needed here. */
+export async function fetchPlatform<T>(path: string): Promise<Remote<T>> {
+  try {
+    const response = await fetch(`/api/platform/${path}`, { cache: "no-store" });
+    const body = await response.json().catch(() => ({}));
+    if (response.status === 502) return { state: "offline" };
+    if (!response.ok) {
+      const message = typeof body?.detail === "string" ? body.detail : `HTTP ${response.status}`;
+      return { state: "unavailable", status: response.status, message, body };
+    }
+    return { state: "ok", data: body as T };
+  } catch {
+    return { state: "offline" };
+  }
+}
+
 export function usePlatform<T>(path: string | null, refreshMs?: number): Remote<T> {
   const [result, setResult] = useState<Remote<T>>({ state: "loading" });
 
   useEffect(() => {
     if (path === null) return;
     let cancelled = false;
+    setResult({ state: "loading" });
     const load = async () => {
-      try {
-        const response = await fetch(`/api/platform/${path}`, { cache: "no-store" });
-        const body = await response.json().catch(() => ({}));
-        if (cancelled) return;
-        if (response.status === 502) setResult({ state: "offline" });
-        else if (!response.ok)
-          setResult({
-            state: "unavailable",
-            status: response.status,
-            message: typeof body?.detail === "string" ? body.detail : `HTTP ${response.status}`,
-          });
-        else setResult({ state: "ok", data: body as T });
-      } catch {
-        if (!cancelled) setResult({ state: "offline" });
-      }
+      const next = await fetchPlatform<T>(path);
+      if (!cancelled) setResult(next);
     };
     void load();
     const timer = refreshMs ? setInterval(load, refreshMs) : undefined;

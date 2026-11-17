@@ -157,7 +157,7 @@ export const BOT_DEMO: Record<BotId, BotDemo> = Object.fromEntries(
 
 // --- activity feed ---
 
-export type ActivityKind = "signal" | "insider" | "risk" | "whale" | "system";
+export type ActivityKind = "signal" | "insider" | "risk" | "whale" | "system" | "ownership";
 
 export interface Activity {
   id: string;

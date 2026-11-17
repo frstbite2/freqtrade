@@ -25,8 +25,16 @@ The FastAPI backend (`backend/`) runs separately; see the repository README.
 - **Demo / Live switch** (top bar). Demo shows the prototype's sample values
   (`src/lib/sample-data.ts`), each one badged DEMO under a page-wide notice. Live shows only what
   the backend returns; anything not built yet says so instead of showing a number.
-- Real data in Stage 1: backend health, configured data providers, trading mode and the risk
-  limits. Everything else is sample data until Stage 2 connects it.
+- **Real data, shown in both modes and marked LIVE:** backend health, configured providers,
+  trading mode, risk limits; SEC insider filings and scores (Insider Intelligence), 13F manager
+  changes and holders by security, 13D/13G large holders (Institutional), the newest SEC
+  disclosures and the ingestion pipeline's health (dashboard, Settings), and each bot's readiness.
+  Every SEC record shows when it became public and when it was ingested; stale data stays visible
+  with its age. Scores are research rankings, not probabilities.
+- **Needs the Milestone 5 backend (PR #2/#3):** `/api/v1/ownership`, `/api/v1/jobs` and
+  `/api/v1/health/ingestion`. Against an older backend those cards say the scheduler is missing.
+- **Not real yet, shown only as DEMO or "unavailable":** prices and charts (Alpaca keys needed),
+  AI signals and bot performance (Milestones 6 and 7), the paper portfolio.
 
 ## Phantom wallet (read-only)
 
@@ -56,8 +64,10 @@ named. A missing price shows "price unavailable", never $0.
 Phantom", Phantom's universal link that opens this page in its in-app browser, where the same
 connect flow works.
 
-**Settings** (server-side, `.env.local`): `SOLANA_RPC_URL` (default: the public, rate-limited
-mainnet endpoint; a provider URL with a key stays on the server) and `WALLET_PRICE_URL`.
+**Settings** (server-side, `.env.local`): `SOLANA_RPC_URL` has no default on purpose. Until it is
+set, the wallet shows "balances unavailable", so real balances appear only after live access has
+been verified and the setting made deliberately. A provider URL with a key stays on the server.
+`WALLET_PRICE_URL` defaults to Jupiter's price API.
 
 **Developing without a wallet or the network:**
 
@@ -77,6 +87,7 @@ cannot reach the Solana network, and no real wallet has been connected.
 src/app/             pages (dashboard, bots, markets, portfolio, insider, institutional,
                      strategies, backtesting, risk, settings) and the API proxy route
 src/components/
+  sec/               SEC filing views: insider, institutional, disclosures feed, pipeline health
   shell/             sidebar, mobile tab bar and menu, top bar, notifications, demo banner
   dashboard/         hero balance, stat tiles, bot cards and details, portfolio, activity
                      feed, markets, trades, strategy comparison, insights, section pages
