@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { changeText, insiderDisclosures, readableProblem, newestFirst, ownershipDisclosure, role, watchlist, type InsiderTransactions, type Jobs, type Ownership } from "./sec.ts";
+import { changeText, freshness, insiderDisclosures, readableProblem, worst, newestFirst, ownershipDisclosure, role, watchlist, type InsiderTransactions, type Jobs, type Ownership } from "./sec.ts";
 
 const load = <T>(name: string): T => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8")) as T;
 const gme = load<InsiderTransactions>("insider-signals-GME.json");
@@ -63,4 +63,16 @@ test("lots from one filing, person and direction become one item with exact tota
 
 test("problem strings get readable times", () => {
   assert.equal(readableProblem("insider: overdue since 2026-11-14T18:39:22.643942+00:00"), "insider: overdue since Nov 14, 18:39 UTC");
+});
+
+test("freshness follows the backend's overdue rule", () => {
+  const now = Date.parse("2026-11-17T12:00:00Z");
+  assert.deepEqual(freshness(null, 60, now), { state: "unavailable" });
+  assert.equal(freshness("2026-11-17T10:31:00Z", 60, now).state, "current"); // 89 min: within 60 + 30
+  assert.equal(freshness("2026-11-17T10:29:00Z", 60, now).state, "stale"); // 91 min
+  assert.equal(freshness("2026-11-14T17:09:24Z", 1440, now).state, "stale");
+  assert.equal(freshness("2026-11-17T11:00:00Z", undefined, now).state, "unknown");
+  const live = freshness("2026-11-17T11:59:00Z", 60, now);
+  assert.equal(worst([live, freshness("2026-11-14T00:00:00Z", 360, now)]).state, "stale");
+  assert.equal(worst([live, { state: "unavailable" }]).state, "unavailable");
 });

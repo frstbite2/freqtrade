@@ -3,11 +3,12 @@
 import { Building2, ExternalLink, Search } from "lucide-react";
 import { useState } from "react";
 import { Chip, LiveBadge } from "@/components/ui/badges";
+import { Fresh } from "./fresh";
 import { SectionHeader } from "@/components/ui/section";
 import { EmptyState, OfflineState, SkeletonRows } from "@/components/ui/states";
 import { ago, usd, utcDateTime } from "@/lib/format";
 import { type Remote, usePlatform } from "@/lib/platform";
-import { type HoldingChange, type Manager, type ManagerChanges, type Ownership, type OwnershipFiling, changeText, shares } from "@/lib/sec";
+import { type HoldingChange, type Jobs, type Manager, type ManagerChanges, type Ownership, type OwnershipFiling, changeText, shares } from "@/lib/sec";
 import { NoWatchlist, TickerPicker, useTicker } from "./ticker-picker";
 
 const STATUS_TONE = { new: "mint", increased: "mint", reduced: "rose", exited: "rose", unchanged: "neutral", unclear: "gold" } as const;
@@ -43,7 +44,7 @@ function LargeHolders() {
       <SectionHeader
         title="Large holders (13D and 13G)"
         subtitle="Each filer's latest disclosed stake above 5%, as of its event date"
-        right={<LiveBadge />}
+        right={result.state === "loading" ? undefined : <Fresh ingestedAt={result.state === "ok" ? result.data.last_ingested_at : null} job="beneficial" jobs={jobs} />}
       />
       <div className="mb-4">
         <TickerPicker ticker={ticker} tickers={tickers} onPick={setTicker} />
@@ -115,6 +116,9 @@ function Coverage({ o }: { o: Ownership }) {
 
 function Managers() {
   const list = usePlatform<{ managers: Manager[]; disclaimer: string }>("api/v1/institutional/managers");
+  const jobs = usePlatform<Jobs>("api/v1/jobs?history=0");
+  // The newest ingestion says whether the 13F job is running on schedule.
+  const ingested = list.state === "ok" ? list.data.managers.map((m) => m.last_ingested_at).sort().at(-1) : null;
   const [chosen, setChosen] = useState<number | null>(null);
   const managers = list.state === "ok" ? [...list.data.managers].sort((a, b) => a.name.localeCompare(b.name)) : [];
   const newest = managers.reduce<string | null>((m, x) => (x.latest_period && (!m || x.latest_period > m) ? x.latest_period : m), null);
@@ -123,7 +127,7 @@ function Managers() {
 
   return (
     <section className="card p-5 sm:p-6">
-      <SectionHeader title="Tracked managers (13F)" subtitle="Quarterly holdings, compared quarter over quarter" right={<LiveBadge />} />
+      <SectionHeader title="Tracked managers (13F)" subtitle="Quarterly holdings, compared quarter over quarter" right={list.state === "loading" ? undefined : <Fresh ingestedAt={ingested} job="institutional" jobs={jobs} />} />
       {list.state === "loading" ? (
         <SkeletonRows rows={5} />
       ) : list.state !== "ok" ? (
@@ -204,6 +208,11 @@ function Changes({ cik }: { cik: number }) {
   );
 }
 
+/** The filing reports a value only for positions still held; an exit has none, not "$0". */
+function heldValue(x: HoldingChange): string {
+  return x.status === "exited" ? "none held" : usd(Number(x.value), 0);
+}
+
 function ChangeRow({ x }: { x: HoldingChange }) {
   return (
     <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
@@ -218,7 +227,7 @@ function ChangeRow({ x }: { x: HoldingChange }) {
         </p>
         {x.note && <p className="truncate text-xs text-gold/80">{x.note}</p>}
       </div>
-      <p className="tabular shrink-0 text-right text-ink">{usd(Number(x.value), 0)}</p>
+      <p className="tabular shrink-0 text-right text-ink">{heldValue(x)}</p>
     </li>
   );
 }
@@ -329,7 +338,7 @@ function Security({ cusip }: { cusip: string }) {
                 </div>
                 <p className="tabular text-xs text-ink-3">{shares(h.previous_shares)} → {shares(h.shares)} sh · disclosed {utcDateTime(h.disclosed_at)}</p>
               </div>
-              <p className="tabular shrink-0 text-ink">{usd(Number(h.value), 0)}</p>
+              <p className="tabular shrink-0 text-ink">{heldValue(h)}</p>
             </li>
           ))}
         </ul>

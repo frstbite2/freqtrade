@@ -1,35 +1,19 @@
 "use client";
 
-import { LineChart, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AreaChart } from "@/components/charts/area-chart";
 import { Sparkline } from "@/components/charts/sparkline";
 import { DemoBadge } from "@/components/ui/badges";
 import { Delta } from "@/components/ui/delta";
 import { SectionHeader } from "@/components/ui/section";
-import { EmptyState, OfflineState, SkeletonRows } from "@/components/ui/states";
+import { EmptyState } from "@/components/ui/states";
 import { TokenIcon } from "@/components/ui/token-icon";
 import { useDataMode } from "@/lib/data-mode";
 import { compact, price, signedPct, utcTime } from "@/lib/format";
-import { type PlatformStatus, usePlatform } from "@/lib/platform";
 import { MARKET_PULSE, TICKERS, type Ticker } from "@/lib/sample-data";
+import { LiveAssetChart, LiveMarketState } from "./live-asset-chart";
 
-/** Live mode: real market data needs Alpaca keys on the backend. Says which piece is missing. */
-function LiveMarketState() {
-  const status = usePlatform<PlatformStatus>("api/v1/status");
-  if (status.state === "loading") return <SkeletonRows rows={3} />;
-  if (status.state === "offline") return <OfflineState what="Market data" />;
-  if (status.state === "unavailable")
-    return <EmptyState title="Market data unavailable">The platform API answered {status.message}.</EmptyState>;
-  const alpaca = status.data.providers_configured.alpaca;
-  return (
-    <EmptyState icon={<LineChart className="size-5 text-sky" aria-hidden />} title={alpaca ? "Market data connects in Stage 2" : "Market data is not configured"}>
-      {alpaca
-        ? "The backend has Alpaca keys. Live quotes and charts are wired to it in Stage 2."
-        : "The backend has no Alpaca API keys, so it serves no prices. It says \"unavailable\" rather than showing made-up numbers."}
-    </EmptyState>
-  );
-}
 
 export function MarketOverview() {
   const { mode } = useDataMode();
@@ -159,13 +143,7 @@ export function Watchlist({
 export function AssetChart({ symbol }: { symbol: string }) {
   const { mode } = useDataMode();
   const t = TICKERS.find((x) => x.symbol === symbol) ?? TICKERS[0];
-  if (mode !== "demo")
-    return (
-      <section className="card p-5 sm:p-6">
-        <SectionHeader title="Asset chart" />
-        <LiveMarketState />
-      </section>
-    );
+  if (mode !== "demo") return <LiveAssetChart />;
   const up = t.change24hPct >= 0;
   return (
     <section className="card glow-ring p-5 sm:p-6" style={{ ["--g1" as string]: t.color, ["--g2" as string]: up ? "#36e3a1" : "#ff5c7a" }}>

@@ -299,3 +299,28 @@ export function readableProblem(text: string): string {
 export function newestFirst(items: Disclosure[], limit: number): Disclosure[] {
   return [...items].sort((a, b) => b.time.localeCompare(a.time)).slice(0, limit);
 }
+
+/** Which scheduler job keeps each kind of record fresh. */
+export type JobName = "insider" | "beneficial" | "institutional";
+
+export type Freshness =
+  | { state: "current" | "stale"; ingestedAt: string }
+  /** Real data, but no schedule to judge it against (the backend has no scheduler). */
+  | { state: "unknown"; ingestedAt: string }
+  | { state: "unavailable" };
+
+/** The backend's own rule (scheduler.py): a job is overdue 30 minutes after its next due time. */
+export const OVERDUE_GRACE_MINUTES = 30;
+
+export function freshness(ingestedAt: string | null | undefined, everyMinutes: number | undefined, now: number): Freshness {
+  if (!ingestedAt) return { state: "unavailable" };
+  if (everyMinutes === undefined) return { state: "unknown", ingestedAt };
+  const ageMinutes = (now - Date.parse(ingestedAt)) / 60_000;
+  return { state: ageMinutes > everyMinutes + OVERDUE_GRACE_MINUTES ? "stale" : "current", ingestedAt };
+}
+
+/** The worst of several: unavailable, then stale, then unknown, then current. */
+export function worst(items: Freshness[]): Freshness {
+  const rank = { unavailable: 3, stale: 2, unknown: 1, current: 0 } as const;
+  return items.reduce<Freshness>((a, b) => (rank[b.state] > rank[a.state] ? b : a), items[0] ?? { state: "unavailable" });
+}

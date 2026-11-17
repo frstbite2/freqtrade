@@ -2,12 +2,14 @@
 
 import { ExternalLink, FileSearch } from "lucide-react";
 import { useState } from "react";
-import { Chip, LiveBadge } from "@/components/ui/badges";
+import { Chip } from "@/components/ui/badges";
 import { SectionHeader } from "@/components/ui/section";
 import { EmptyState, OfflineState, SkeletonRows } from "@/components/ui/states";
 import { ago, usd, utcDateTime } from "@/lib/format";
 import { type Remote, usePlatform } from "@/lib/platform";
+import type { Jobs } from "@/lib/sec";
 import { type InsiderScore, type InsiderTransactions, type InsiderTx, categoryLabel, role, shares } from "@/lib/sec";
+import { Fresh } from "./fresh";
 import { NoWatchlist, TickerPicker, useTicker } from "./ticker-picker";
 
 const COMPONENT_LABEL: Record<string, string> = {
@@ -33,8 +35,8 @@ export function InsiderView() {
         </section>
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[1fr_1.6fr]">
-          <ScoreCard ticker={ticker} />
-          <Transactions ticker={ticker} />
+          <ScoreCard ticker={ticker} jobs={jobs} />
+          <Transactions ticker={ticker} jobs={jobs} />
         </div>
       )}
     </div>
@@ -52,11 +54,11 @@ function NotIngested({ result, what }: { result: Remote<unknown>; what: string }
   );
 }
 
-function ScoreCard({ ticker }: { ticker: string }) {
+function ScoreCard({ ticker, jobs }: { ticker: string; jobs: Remote<Jobs> }) {
   const result = usePlatform<InsiderScore>(`api/v1/insider/${ticker}/score`);
   return (
     <section className="card glow-ring flex flex-col p-5 sm:p-6" style={{ ["--g1" as string]: "#ffc65c", ["--g2" as string]: "#ff8a3d" }}>
-      <SectionHeader title={`${ticker} insider score`} subtitle="Research ranking of disclosed open-market buying" right={<LiveBadge />} />
+      <SectionHeader title={`${ticker} insider score`} subtitle="Research ranking of disclosed open-market buying" right={result.state === "loading" ? undefined : <Fresh ingestedAt={result.state === "ok" ? result.data.last_ingested_at : null} job="insider" jobs={jobs} />} />
       {result.state === "loading" ? (
         <SkeletonRows rows={5} />
       ) : result.state !== "ok" ? (
@@ -137,7 +139,7 @@ function Tally({ label, tone, t }: { label: string; tone: "mint" | "rose"; t: { 
   );
 }
 
-function Transactions({ ticker }: { ticker: string }) {
+function Transactions({ ticker, jobs }: { ticker: string; jobs: Remote<Jobs> }) {
   const [signalsOnly, setSignalsOnly] = useState(true);
   const [all, setAll] = useState(false);
   const result = usePlatform<InsiderTransactions>(`api/v1/insider/${ticker}/transactions?signals_only=${signalsOnly}&limit=50`);
@@ -147,6 +149,8 @@ function Transactions({ ticker }: { ticker: string }) {
         title="Disclosed transactions"
         subtitle={result.state === "ok" ? `${result.data.total} ${signalsOnly ? "open-market trades" : "rows"}, newest first${result.data.total > 50 ? " (50 shown)" : ""}` : "From Forms 3, 4 and 5"}
         right={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+          {result.state !== "loading" && <Fresh ingestedAt={result.state === "ok" ? result.data.last_ingested_at : null} job="insider" jobs={jobs} />}
           <div className="flex rounded-xl border border-line bg-white/[0.03] p-0.5 text-xs" role="group" aria-label="Which transactions">
             {[true, false].map((v) => (
               <button
@@ -159,6 +163,7 @@ function Transactions({ ticker }: { ticker: string }) {
                 {v ? "Signals" : "All rows"}
               </button>
             ))}
+          </div>
           </div>
         }
       />

@@ -31,6 +31,14 @@ The FastAPI backend (`backend/`) runs separately; see the repository README.
   disclosures and the ingestion pipeline's health (dashboard, Settings), and each bot's readiness.
   Every SEC record shows when it became public and when it was ingested; stale data stays visible
   with its age. Scores are research rankings, not probabilities.
+- **Freshness of real data:** each SEC card shows LIVE (ingested on schedule), STALE (the job is
+  overdue: interval plus 30 minutes, the backend's own rule; data shown with its age) or
+  UNAVAILABLE (nothing ingested). A stale or unusable quote is never shown as a live price.
+- **Market data:** with Alpaca keys on the backend, Live mode charts daily bars and the latest
+  quote for the watchlist (`/api/v1/market`). Live verification pending: tested on mock responses
+  only. A provider failure (backend 502 with a reason) is reported as such, not as "offline".
+- **Guards:** `src/lib/demo-guard.test.ts` fails if a component that reads the API imports sample
+  values, or if a sample-value view lacks a DEMO badge or the Demo/Live check.
 - **Needs the Milestone 5 backend (PR #2/#3):** `/api/v1/ownership`, `/api/v1/jobs` and
   `/api/v1/health/ingestion`. Against an older backend those cards say the scheduler is missing.
 - **Not real yet, shown only as DEMO or "unavailable":** prices and charts (Alpaca keys needed),

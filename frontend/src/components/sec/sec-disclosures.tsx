@@ -4,18 +4,18 @@ import { FileSearch } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Item } from "@/components/dashboard/activity-feed";
-import { LiveBadge } from "@/components/ui/badges";
+import { FreshFor } from "./fresh";
 import { SectionHeader } from "@/components/ui/section";
 import { EmptyState, OfflineState, SkeletonRows } from "@/components/ui/states";
 import { ago } from "@/lib/format";
 import { fetchPlatform } from "@/lib/platform";
-import { type Disclosure, type InsiderTransactions, type Jobs, type Ownership, insiderDisclosures, newestFirst, ownershipDisclosure, watchlist } from "@/lib/sec";
+import { type Disclosure, type Freshness, type InsiderTransactions, type Jobs, type Ownership, insiderDisclosures, newestFirst, ownershipDisclosure, freshness, watchlist, worst } from "@/lib/sec";
 
 type Feed =
   | { state: "loading" }
   | { state: "offline" }
   | { state: "none"; reason: string }
-  | { state: "ok"; items: Disclosure[]; tickers: string[]; unavailable: string[]; ingested: string | null };
+  | { state: "ok"; items: Disclosure[]; tickers: string[]; unavailable: string[]; ingested: string | null; fresh: Freshness };
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -51,17 +51,27 @@ export function SecDisclosures({ limit = 6 }: { limit?: number }) {
       const items: Disclosure[] = [];
       const unavailable: string[] = [];
       const ingested: string[] = [];
+      const insiderAt: string[] = [];
+      const ownershipAt: string[] = [];
       for (const { t, ins, own } of results) {
         if (ins.state === "ok") {
           items.push(...insiderDisclosures(t, ins.data.transactions));
           ingested.push(ins.data.last_ingested_at);
+          insiderAt.push(ins.data.last_ingested_at);
         } else unavailable.push(`${t} insider`);
         if (own.state === "ok") {
           items.push(...(own.data.filings ?? []).map((f) => ownershipDisclosure(t, f)));
           ingested.push(own.data.last_ingested_at);
+          ownershipAt.push(own.data.last_ingested_at);
         } else unavailable.push(`${t} 13D/13G`);
       }
-      setFeed({ state: "ok", items, tickers, unavailable, ingested: ingested.sort()[0] ?? null });
+      // Oldest ingestion per source against that source's own schedule; the card shows the worse.
+      const now = Date.now();
+      const fresh = worst([
+        freshness(insiderAt.sort()[0], jobs.data.jobs.insider?.every_minutes, now),
+        freshness(ownershipAt.sort()[0], jobs.data.jobs.beneficial?.every_minutes, now),
+      ]);
+      setFeed({ state: "ok", items, tickers, unavailable, ingested: ingested.sort()[0] ?? null, fresh });
     })();
     return () => {
       cancelled = true;
@@ -75,7 +85,7 @@ export function SecDisclosures({ limit = 6 }: { limit?: number }) {
       <SectionHeader
         title="SEC disclosures"
         subtitle={feed.state === "ok" ? `Newest filings for ${feed.tickers.join(", ")}` : "Newest filings on the watchlist"}
-        right={<LiveBadge />}
+        right={feed.state === "ok" ? <FreshFor f={feed.fresh} /> : feed.state === "none" ? <FreshFor f={{ state: "unavailable" }} /> : undefined}
       />
       {feed.state === "loading" ? (
         <SkeletonRows rows={4} />

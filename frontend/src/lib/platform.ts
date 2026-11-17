@@ -15,7 +15,8 @@ export async function fetchPlatform<T>(path: string): Promise<Remote<T>> {
   try {
     const response = await fetch(`/api/platform/${path}`, { cache: "no-store" });
     const body = await response.json().catch(() => ({}));
-    if (response.status === 502) return { state: "offline" };
+    // The proxy's own 502 means the backend is unreachable; a backend 502 (a provider failed) carries `detail`.
+    if (response.status === 502 && typeof body?.detail !== "string") return { state: "offline" };
     if (!response.ok) {
       const message = typeof body?.detail === "string" ? body.detail : `HTTP ${response.status}`;
       return { state: "unavailable", status: response.status, message, body };
