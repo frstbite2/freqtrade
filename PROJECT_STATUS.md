@@ -1,6 +1,47 @@
 # AI Trading Platform — Project Status
 
-Last updated: 2026-11-14 · Complete and verified on real data: **1, 4**, and the SEC half of **5** (13F, 13D, 13G), plus scheduled ingestion · Built, live verification pending: **2** · Built, unverified on real data: **3** · Not started: options flow (needs a paid provider), 6 to 10
+Last updated: 2026-11-16 · Complete and verified on real data: **1, 4**, and the SEC half of **5** (13F, 13D, 13G), plus scheduled ingestion and database migrations · Built, live verification pending: **2** · Built, unverified on real data: **3** · Not started: options flow (needs a paid provider), 6 to 10
+
+## Status at a glance
+
+Where the work lives: everything through 13F is on `claude/ai-trading-platform-g23fcw`. Schedules
+13D/13G, scheduled ingestion and platform CI are in draft PR #2; database migrations are in draft
+PR #3, stacked on #2. Neither PR is merged; both wait for the owner's review. Paper trading only:
+`trading_mode: live` is a validation error.
+
+**Complete and verified**
+- Foundation: settings, logging with secret redaction, API with authentication and rate limit,
+  audit log, Docker stack (M1).
+- SEC insider filings, Forms 3/4/5: parsing, classification, scoring, history; checked against
+  SEC's own data sets (M4).
+- SEC Form 13F holdings and Schedules 13D/13G: parsing, ingestion, history, API; checked on real
+  filings (M5, SEC half).
+- Scheduled ingestion of all SEC sources, reviewed for continuous running (section 5f).
+- Database migrations with Alembic, audited against every past schema and real databases (5g).
+- Unattended running (5h): one SEC ingestion lock for every process (crash-safe, keeps the
+  combined SEC rate under its limit), an ingestion health endpoint, 90-day run-history
+  retention that never touches research data, and production checks on the API token.
+- Backup and restore requirements, with a restore procedure tested on real data (section 7).
+- CI configured for every pull request: platform tests (also on PostgreSQL), lint, type check,
+  Docker image build with tests inside it, and upstream freqtrade's own CI. GitHub Actions has
+  been disabled on this repository since 2026-11-16, so none of it runs until it is re-enabled.
+
+**Built, waiting for credentials or live verification**
+- Market data (M2): the Alpaca adapter has never called the real API. Needs free Alpaca paper
+  keys (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY`) and network access to `data.alpaca.markets`.
+- Technical analysis (M3): tested only on constructed price series; it runs on real prices once
+  M2 is verified.
+- Full Docker stack on a normal network: the image is built and tested in CI, but database, API
+  and worker together have only run in the development sandbox, which cannot reach sec.gov.
+
+**Not started**
+- Options flow (M5): needs a paid data provider; the owner decides which, if any.
+- Milestones 6 to 10: on hold until the owner has reviewed PRs #2 and #3.
+
+No API keys are configured. SEC EDGAR needs only `SEC_USER_AGENT` (a name and contact email).
+
+Passing tests do not make the platform production-ready: section 7 lists what still has to change
+before it runs unattended.
 
 Milestone 4 (insider filings) was done before Milestone 2 (market data) at the owner's request,
 because SEC EDGAR needs no API key and could be verified against real data immediately.
@@ -124,7 +165,9 @@ The full compose stack (database, API, worker together) has still only been star
 no route to sec.gov, so the worker's runs there ended as recorded failures, which is the designed
 behaviour; scheduled ingestion against live EDGAR was verified outside the container.
 
-Checks that now gate every change: `pytest` (374 tests), `ruff check` and `ruff format`, and
+Checks that now gate every change: `pytest` (457 tests pass with PostgreSQL available for the
+database tests, 435 on SQLite alone; the opt-in live tests and database-specific variants skip),
+`ruff check` and `ruff format`, and
 `mypy --config-file backend/mypy.ini backend` (0 errors; it reported 91 when first run, all fixed).
 
 CI: `.github/workflows/platform-ci.yml` runs those checks on every pull request that touches the
@@ -588,6 +631,79 @@ no retention) were fixed on 2026-11-16; see section 5h.
 Not done: notifications when a run fails. Failures are recorded, logged and reported by the
 health endpoint, which any monitor can watch; no email or chat integration exists yet.
 
+## 5g. Database migrations (complete)
+
+The schema is now managed by Alembic (`backend/migrations/`); `create_all` is gone. Every start of
+the API, the worker and the ingestion commands upgrades the database to the newest revision.
+
+| Behaviour | How |
+|---|---|
+| Fresh database | Revision `0001` creates all 13 tables. |
+| Database created before migrations | `0001` creates only the tables that are missing and records the revision. Existing tables and rows are not touched. |
+| Reversible | Every revision has a downgrade. Reversing `0001` drops the tables, so it refuses to run while any of them holds a row. |
+| API and worker starting together | On PostgreSQL the migration takes a transaction-level advisory lock, so the second process waits. |
+| Model changed without a migration | A test compares the migrated schema with the models and fails. |
+| Schema differs from the models at start-up | Logged as an error with the differences (never altered silently). |
+
+Changing the schema: edit the model, then
+`alembic -c backend/alembic.ini revision --autogenerate -m "what changed"`, review the generated
+file, and add a test if it moves data.
+
+Safety audit (2026-11-15) and what it changed:
+
+- **Older databases.** The database was rebuilt as each of the seven past commits that changed
+  the models created it, on SQLite and on PostgreSQL, then adopted. Three early versions lacked
+  two columns (`insider_filing.classifier_version`, `insider_issuer.failed_filings`); adoption
+  left those databases unusable. The baseline now adds them. Existing rows get 0: for
+  `classifier_version` that is below every real version, so ingestion re-classifies those filings;
+  for `failed_filings` it stands only until the next ingestion run. All seven now adopt with no
+  difference from the models and no rows lost. The seven schemas are kept as test fixtures.
+- **Failed migration.** On SQLite a migration that failed half way kept its table changes (Python's
+  default SQLite mode commits them immediately). Migrations now run on SQLite with transactional
+  DDL, so a failure rolls back everything on both databases. Only migrations use that mode (see
+  the reassessment below).
+- **Lock.** Besides four processes starting at once, a process is shown to wait while another
+  holds the lock, to leave the schema untouched meanwhile, and to finish once it is released.
+  PostgreSQL releases the lock itself if the holder dies. There is no time limit on the wait.
+- **Downgrade.** On PostgreSQL the baseline downgrade now locks the tables before checking that
+  they are empty, so nothing can be written between the check and the drop. The migration tests
+  refuse to run against a database that holds rows.
+
+Verified (2026-11-15): 13 migration tests. On SQLite 17 pass (10 tests plus the seven historical
+schemas) and the two lock tests are skipped; on PostgreSQL 16 (TimescaleDB image) all 12 that take
+a database pass. Both lock tests fail when the lock is disabled. Seven real
+databases left from earlier ingestion runs, all created before migrations (81,173 rows; four of
+them missing the columns above), were adopted as copies: a hash of every existing row was
+identical before and after, and none differed from the models afterwards. In the sandbox
+Docker stack: a database created by the previous image was adopted (revision recorded, row counts
+only grew, `downgrade base` refused), and three cold starts of API and worker together on an empty
+database each ran the baseline exactly once with no errors. CI runs the migration tests against a
+PostgreSQL service.
+
+Reassessment against the updated PR #2 (2026-11-16). PR #2's fixes merged into the migrations
+branch without conflict and changed no table. One regression was found in the migrations work
+itself: transactional DDL had been switched on for every SQLite connection, and in that mode a
+session that has only read keeps a lock that blocks other processes' writes until it ends. PR #2's
+new test of a manual ingest running beside the worker failed with "database is locked". Only
+migrations now use that mode, through their own connection, both at start-up and from the
+`alembic` command. The failed-migration test runs through both paths; with the start-up path's
+setting removed it fails. PostgreSQL was never affected.
+
+Verified after the reassessment: full suite 412 passed with PostgreSQL, 399 on SQLite (12 skipped);
+migration tests 18 passed on SQLite (2 lock tests skipped) and 13 on PostgreSQL; PR #2's scheduler
+tests, including the race between a manual ingest and the worker, pass on SQLite and on
+PostgreSQL; the seven real databases (81,173 rows) again kept every row unchanged. In the sandbox
+Docker stack, a cold start ran the baseline once with no errors, and stopping the worker mid-run
+recorded the run as interrupted, naming the target it had not reached, within 4 seconds.
+
+After section 5h's changes were merged in (2026-11-16): migration tests 18 passed on SQLite and
+13 on PostgreSQL; full suite 435 passed on SQLite and 457 with PostgreSQL; the seven real
+databases again kept every row unchanged; two cold starts of the Docker stack in production mode
+each ran the baseline once with no errors while the worker held the SEC ingestion lock.
+
+Not done: offline SQL script generation (`alembic --sql`); TimescaleDB hypertables (no table uses
+them yet).
+
 ## 5h. Unattended running: SEC lock, health, retention, API security (complete)
 
 Approved by the owner on 2026-11-16 after a proposal with tradeoffs. Every issue below was first
@@ -666,7 +782,8 @@ a lost lock stopping a run, the health endpoint (healthy, failed, interrupted an
 overdue, never run, database down, token required), retention (only eligible rows go; every
 research table's row count unchanged), production token rules, docs gating, credentials absent
 from every response, and the compose file. Full suite: 417 passed on SQLite (11 skipped), 426
-with PostgreSQL (10 skipped). In the sandbox Docker stack, in production mode: keepalives active
+with PostgreSQL (10 skipped), on PR #2's branch (with the migrations of PR #3: 435 and 457).
+In the sandbox Docker stack, in production mode: keepalives active
 (`tcp_keepalives_idle=30`, from the command line); a manual ingest beside the worker exited with
 status 1 and the message; `docker kill` of the worker freed the lock in 291 ms and the restarted
 worker closed the dead run as abandoned at once; `docker compose stop` recorded the run as
@@ -676,9 +793,11 @@ password.
 
 ## 6. Known shortcuts and deferred items
 
-- Schema is created with `create_all`, which cannot alter existing tables. A development database
-  created before a model change must be deleted and re-ingested (filings are cached). Adopt
-  Alembic before the first deployment that must keep its data.
+- Migrations (section 5g): the baseline repairs the two column gaps that past versions of the
+  platform really had. Any other difference in a pre-migration database (for example a missing
+  index) is reported at start-up, not repaired.
+- Migration downgrades are tested on empty tables only (the baseline refuses to drop data); each
+  future migration that changes data needs its own test with rows in place.
 - SQLite stores decimals as floating point (about 15 significant digits); PostgreSQL is exact.
 - Redis is not in the stack. The price cache is the database; add Redis only when something
   needs shared short-lived state (for example streaming quotes or job coordination).
@@ -686,10 +805,86 @@ password.
   exposing the API beyond localhost, move it to a shared store or a reverse proxy.
 - Uvicorn's own access log lines are plain text, not JSON (they contain no secrets).
 - Single shared bearer token rather than user accounts; revisit with the dashboard (M9).
-- Backups are deferred to M10. Requirements: a nightly `pg_dump --format=custom` of the platform
-  database kept off the database host, at least 14 daily and 8 weekly copies; a restore drill
-  at least quarterly that restores into a fresh database and checks row counts; later,
-  continuous archiving for point-in-time recovery. Most research data can be re-ingested from
-  SEC with its original publication times (the EDGAR cache volume speeds that up); the audit log
-  and run history cannot, so they are what backups chiefly protect. The tested restore procedure
-  is in section 7 (in #3).
+- Backups are deferred to M10; requirements and the tested restore procedure are in section 7.
+- Schedules 13D/13G: a holder's history is linked by the reporting person's name, so differently
+  spelled names count as different holders (section 5e).
+- Scheduler (sections 5f, 5h): no notification channel for failed runs yet (the health endpoint
+  reports them).
+
+## 7. Before production
+
+Everything here is known and documented, and none of it is hidden by the tests passing. Items
+marked *(decision)* change the architecture or add a service, so they wait for the owner.
+
+Fixed on 2026-11-16 (section 5h): the job lock judged by age, SEC request spacing per process,
+the missing ingestion health check, unlimited run history, and placeholder API tokens.
+
+Reliability of the worker
+- **No notifications.** Failed, overdue and interrupted jobs are reported by
+  `GET /api/v1/health/ingestion` (503 when failing or overdue), but nothing watches it yet.
+  *(decision: which channel)*
+- **Lock loss inside one target.** The worker checks the SEC ingestion lock between targets.
+  If the database restarted while one target was being ingested, a second process could start
+  before the first notices. Data stays correct (ingestion tolerates duplicates); SEC traffic
+  could briefly double.
+- **SQLite lock is local only.** It coordinates processes on one machine using the same database
+  file, and network file systems may not honour it. Deployment uses PostgreSQL.
+- **First runs on an empty cache were never timed.** They no longer affect locking, but a first
+  run longer than a job's interval plus 30 minutes would show as overdue in the health check.
+
+Verification still missing
+- Full Docker stack (database, API, worker) on a normal network with access to sec.gov: only run
+  in the development sandbox. The image itself is built and tested in CI.
+- PostgreSQL adoption of a real, populated pre-migration database: none existed; checked on
+  rebuilt schemas and a small database.
+- Alpaca market data (M2) against the real API, and technical analysis (M3) on real prices: need
+  Alpaca paper keys.
+- The 13D/13G parser was checked against a second extraction of the same filings, not against an
+  SEC data set (SEC publishes none).
+
+Data limits that stay true in production
+- 13D/13G holders are linked across filings by name; spelling variants split a holder in two.
+- 13D/13G filings before December 2024 have no figures; 13F and 13D/13G are delayed disclosures,
+  never current holdings.
+
+Operations and security
+- **No automated backups** (M10). Requirements: a nightly `pg_dump --format=custom` of the
+  platform database, stored off the database host, keeping at least 14 daily and 8 weekly copies;
+  a restore drill at least quarterly, using the procedure below; later, continuous archiving for
+  point-in-time recovery. Most research data can be re-ingested from SEC with its original
+  publication times (the EDGAR cache volume speeds that up); the audit log and run history cannot,
+  so they are what backups chiefly protect.
+- One shared API bearer token and an in-process rate limit: do not expose the API beyond a trusted
+  network until accounts and a shared limiter exist (M9). The API stays on `127.0.0.1`.
+- The runtime image also contains the test and type-check tools (`pytest`, `mypy`); a separate
+  production image without them would be smaller.
+- SQLite is for development: its writes are serialised and wait at most 5 seconds for a lock.
+
+### Restore procedure (tested 2026-11-16)
+
+Tested in the development sandbox with a real platform database of 24,449 rows (Forms 3/4/5,
+13F and 13D/13G filings, run history, audit log) on the compose file's TimescaleDB (PostgreSQL
+16) image: every table's rows and every id sequence were identical after the restore, and the
+platform started on the restored database with the migration revision intact and no schema
+differences.
+
+```bash
+# Backup (from the host, while the stack runs). The warning about circular foreign keys in
+# TimescaleDB's own catalog tables is expected and harmless for a full dump.
+docker compose -f docker-compose.platform.yml exec -T db \
+  pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner > platform.dump
+
+# Restore into an empty database (a new server, or after dropping the old database).
+docker compose -f docker-compose.platform.yml stop api worker
+docker compose -f docker-compose.platform.yml exec -T db createdb -U "$POSTGRES_USER" trading_restored
+docker compose -f docker-compose.platform.yml exec -T db \
+  pg_restore -U "$POSTGRES_USER" -d trading_restored --no-owner --exit-on-error < platform.dump
+
+# Check: row counts per table against the source, then point DATABASE_URL (POSTGRES_DB) at the
+# restored database and start the API and worker; they verify the migration revision on start.
+```
+
+Rows copied into PostgreSQL by other means (for example from a SQLite development database)
+keep their ids but do not advance PostgreSQL's id sequences: reset each sequence to the
+table's highest id, or new rows fail. The drill found this in its own loading script; `pg_dump`
+and `pg_restore` carry sequences over correctly.

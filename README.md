@@ -2,11 +2,12 @@
 
 This fork adds a standalone, paper-trading-only AI trading research platform in `backend/`,
 next to the upstream freqtrade crypto bot (documented below, unchanged). Status, architecture,
-roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: foundation
-SEC insider filings, 13F institutional holdings and 13D/13G large-holder filings (all verified
-on real filings), and scheduled ingestion for them. A market-data adapter for Alpaca and the
-technical-analysis engine are built, but neither has run on real prices yet (needs Alpaca API
-keys).** There is no trading yet.
+roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: the
+foundation, SEC insider filings, 13F institutional holdings and 13D/13G large-holder filings (all
+verified on real filings), scheduled ingestion for them, and database migrations. A market-data
+adapter for Alpaca and the technical-analysis engine are built, but neither has run on real prices
+yet (needs Alpaca API keys). Options flow is not started (needs a paid data provider).** There is
+no trading yet.
 
 ```bash
 # Local (SQLite)
@@ -20,6 +21,9 @@ curl -H "Authorization: Bearer dev" localhost:8000/api/v1/status
 cp .env.example .env    # then set API_AUTH_TOKEN and POSTGRES_PASSWORD
 docker compose -f docker-compose.platform.yml up -d --build
 ```
+
+The database schema is versioned with Alembic (`backend/migrations/`). The platform upgrades its
+database on start, including one created by an earlier version; existing data is kept.
 
 Insider filings (SEC Forms 3, 4, 5) need no API key, only a contact string that SEC requires:
 
