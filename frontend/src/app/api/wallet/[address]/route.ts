@@ -3,8 +3,9 @@
  * key. The browser sends only a public address; nothing here can sign or move funds.
  *
  * Settings (server-side only, see .env.example):
- *   SOLANA_RPC_URL    JSON-RPC endpoint; defaults to Solana's public mainnet endpoint, which is
- *                     rate-limited. A provider URL with a key stays on this server.
+ *   SOLANA_RPC_URL    JSON-RPC endpoint. Required: there is deliberately no default, so real
+ *                     balances appear only after someone sets it on purpose, once live access is
+ *                     verified. A provider URL with a key stays on this server.
  *   WALLET_PRICE_URL  price endpoint answering ?ids=<mint,...> in Jupiter Price API v3 form;
  *                     prices are optional: without them balances still show, without USD values.
  *
@@ -26,7 +27,6 @@ import { KNOWN_TOKENS, WRAPPED_SOL_MINT } from "@/lib/wallet/tokens";
 export const dynamic = "force-dynamic";
 
 const TIMEOUT_MS = 10_000;
-const PUBLIC_RPC = "https://api.mainnet-beta.solana.com";
 const DEFAULT_PRICES = "https://lite-api.jup.ag/price/v3";
 
 class RpcError extends Error {}
@@ -70,7 +70,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ add
   if (!isSolanaAddress(address)) {
     return Response.json({ error: "not a Solana address" }, { status: 400 });
   }
-  const url = process.env.SOLANA_RPC_URL || PUBLIC_RPC;
+  const url = process.env.SOLANA_RPC_URL;
+  if (!url) {
+    return Response.json({ error: "Balances unavailable: no Solana RPC is configured on this server (SOLANA_RPC_URL)." }, { status: 503 });
+  }
   try {
     const accounts = (program: string) =>
       rpc<TokenAccountsResult>(url, "getTokenAccountsByOwner", [address, { programId: program }, { encoding: "jsonParsed", commitment: "confirmed" }]);
