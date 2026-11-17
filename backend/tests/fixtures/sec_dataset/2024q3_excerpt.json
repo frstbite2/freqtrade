@@ -1,0 +1,262 @@
+{
+ "0001127602-24-019550": {
+  "SUBMISSION": [
+   {
+    "DOCUMENT_TYPE": "4",
+    "PERIOD_OF_REPORT": "28-JUN-2024",
+    "DATE_OF_ORIG_SUB": "",
+    "ISSUERCIK": "0000320187",
+    "ISSUERTRADINGSYMBOL": "NKE",
+    "AFF10B5ONE": "1"
+   }
+  ],
+  "REPORTINGOWNER": [
+   {
+    "RPTOWNERCIK": "0001218363",
+    "RPTOWNER_RELATIONSHIP": "Director",
+    "RPTOWNER_TITLE": ""
+   }
+  ],
+  "NONDERIV_TRANS": [
+   {
+    "SECURITY_TITLE": "Class B Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "20946.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "D",
+    "NATURE_OF_OWNERSHIP": "",
+    "TRANS_DATE": "28-JUN-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "2941.0",
+    "TRANS_PRICEPERSHARE": "77.02",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   }
+  ],
+  "NONDERIV_HOLDING": [
+   {
+    "SECURITY_TITLE": "Class B Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "1580.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "by Trust"
+   }
+  ],
+  "DERIV_TRANS": [],
+  "DERIV_HOLDING": []
+ },
+ "0001127602-24-021794": {
+  "SUBMISSION": [
+   {
+    "DOCUMENT_TYPE": "4",
+    "PERIOD_OF_REPORT": "05-AUG-2024",
+    "DATE_OF_ORIG_SUB": "",
+    "ISSUERCIK": "0000050863",
+    "ISSUERTRADINGSYMBOL": "INTC",
+    "AFF10B5ONE": "0"
+   }
+  ],
+  "REPORTINGOWNER": [
+   {
+    "RPTOWNERCIK": "0001316331",
+    "RPTOWNER_RELATIONSHIP": "Director,Officer",
+    "RPTOWNER_TITLE": "CEO"
+   }
+  ],
+  "NONDERIV_TRANS": [
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "37975.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "By Family Trust",
+    "TRANS_DATE": "05-AUG-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "5000.0",
+    "TRANS_PRICEPERSHARE": "19.92",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "32975.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "By Family Trust",
+    "TRANS_DATE": "05-AUG-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "7500.0",
+    "TRANS_PRICEPERSHARE": "20.31",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   }
+  ],
+  "NONDERIV_HOLDING": [
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "80047.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "By Trust"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "38416.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "D",
+    "NATURE_OF_OWNERSHIP": "By Family Trust"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "1480.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "By Trust"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "58558.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "By Trust"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "84419.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "By Trust"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "191926.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": ""
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "138486.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "By Trust"
+   }
+  ],
+  "DERIV_TRANS": [],
+  "DERIV_HOLDING": []
+ },
+ "0001437749-24-028607": {
+  "SUBMISSION": [
+   {
+    "DOCUMENT_TYPE": "4",
+    "PERIOD_OF_REPORT": "05-SEP-2024",
+    "DATE_OF_ORIG_SUB": "",
+    "ISSUERCIK": "0001811074",
+    "ISSUERTRADINGSYMBOL": "TPL",
+    "AFF10B5ONE": "1"
+   }
+  ],
+  "REPORTINGOWNER": [
+   {
+    "RPTOWNERCIK": "0001207097",
+    "RPTOWNER_RELATIONSHIP": "Director,TenPercentOwner",
+    "RPTOWNER_TITLE": ""
+   },
+   {
+    "RPTOWNERCIK": "0001056823",
+    "RPTOWNER_RELATIONSHIP": "",
+    "RPTOWNER_TITLE": ""
+   }
+  ],
+  "NONDERIV_TRANS": [
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "5479.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "Horizon Credit Opportunity Fund LP",
+    "TRANS_DATE": "05-SEP-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "1.0",
+    "TRANS_PRICEPERSHARE": "810.0",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "315596.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "Horizon Kinetics Hard Assets LLC",
+    "TRANS_DATE": "05-SEP-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "2.0",
+    "TRANS_PRICEPERSHARE": "810.0",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "7695.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "D",
+    "NATURE_OF_OWNERSHIP": "Horizon Common Inc",
+    "TRANS_DATE": "05-SEP-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "3.0",
+    "TRANS_PRICEPERSHARE": "810.0",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "5468.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "Polestar Offshore Fund Ltd",
+    "TRANS_DATE": "05-SEP-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "2.0",
+    "TRANS_PRICEPERSHARE": "810.0",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "130261.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "Horizon Kinetics Asset Management LLC",
+    "TRANS_DATE": "05-SEP-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "1.0",
+    "TRANS_PRICEPERSHARE": "810.0",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "592108.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "",
+    "TRANS_DATE": "05-SEP-2024",
+    "TRANS_CODE": "P",
+    "EQUITY_SWAP_INVOLVED": "0",
+    "TRANS_SHARES": "3.0",
+    "TRANS_PRICEPERSHARE": "804.84",
+    "TRANS_ACQUIRED_DISP_CD": "A"
+   }
+  ],
+  "NONDERIV_HOLDING": [
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "180.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "Spouse"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "16647.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "CDK Fund Ltd"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "7452.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "CDK Partners LP"
+   },
+   {
+    "SECURITY_TITLE": "Common Stock",
+    "SHRS_OWND_FOLWNG_TRANS": "4416.0",
+    "DIRECT_INDIRECT_OWNERSHIP": "I",
+    "NATURE_OF_OWNERSHIP": "Horizon Kinetics Hard Assets II LLC"
+   }
+  ],
+  "DERIV_TRANS": [],
+  "DERIV_HOLDING": []
+ }
+}

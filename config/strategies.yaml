@@ -1,0 +1,11 @@
+# Opportunity-score weights (must sum to 1.0). Scores are research rankings,
+# not probabilities of profit; weights must be validated by walk-forward backtests.
+scoring_weights:
+  technical: 0.20
+  pattern: 0.20
+  insider: 0.15
+  institutional: 0.10
+  options: 0.10
+  sentiment: 0.10
+  volume_momentum: 0.10
+  regime: 0.05

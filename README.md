@@ -1,3 +1,66 @@
+# AI Trading Platform (this fork)
+
+This fork adds a standalone, paper-trading-only AI trading research platform in `backend/`,
+next to the upstream freqtrade crypto bot (documented below, unchanged). Status, architecture,
+roadmap and required API keys: [PROJECT_STATUS.md](PROJECT_STATUS.md). **Done so far: foundation
+and SEC insider-filing and 13F institutional-holdings intelligence, verified on real filings. A market-data adapter for Alpaca and the
+technical-analysis engine are built, but neither has run on real prices yet (needs Alpaca API
+keys).** There is no trading yet.
+
+```bash
+# Local (SQLite)
+python3 -m venv .venv && .venv/bin/pip install -r requirements-platform.txt
+cd backend && ../.venv/bin/pytest && cd ..
+API_AUTH_TOKEN=dev .venv/bin/uvicorn --factory backend.main:create_app
+curl localhost:8000/health
+curl -H "Authorization: Bearer dev" localhost:8000/api/v1/status
+
+# Docker (API + TimescaleDB)
+cp .env.example .env    # then set API_AUTH_TOKEN and POSTGRES_PASSWORD
+docker compose -f docker-compose.platform.yml up -d --build
+```
+
+Insider filings (SEC Forms 3, 4, 5) need no API key, only a contact string that SEC requires:
+
+```bash
+export SEC_USER_AGENT="Your Name you@example.com"
+.venv/bin/python -m backend.services.insider_intelligence.ingest NKE --since 2023-01-01
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/insider/NKE/score"
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/insider/NKE/transactions?signals_only=true"
+```
+
+Scores are research rankings of disclosed insider buying, not predictions.
+
+Institutional holdings (SEC Form 13F) work the same way, for the managers listed under
+`tracked_managers` in `config/settings.yaml`. 13F has no tickers, so look up the CUSIP first:
+
+```bash
+.venv/bin/python -m backend.services.institutional_analysis.ingest --since 2024-01-01
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/institutional/search?name=nvidia"
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/institutional/securities/67066G104"
+```
+
+13F data is a quarter-end snapshot disclosed up to 45 days later, not current holdings.
+
+Prices need Alpaca keys (free paper keys work) in `.env`; without them the API answers
+"unavailable" rather than inventing data:
+
+```bash
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/market/AAPL/bars?timeframe=1d"
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/market/AAPL/quote"
+```
+
+Technical analysis (indicators, candlestick and chart patterns, market structure) uses the same
+prices, so it also answers "unavailable" until Alpaca keys are set:
+
+```bash
+curl -H "Authorization: Bearer dev" "localhost:8000/api/v1/technical/AAPL?timeframes=1d,1w"
+```
+
+Settings live in `config/*.yaml`; secrets only in `.env` (never committed).
+
+---
+
 # ![freqtrade](https://raw.githubusercontent.com/freqtrade/freqtrade/develop/docs/assets/freqtrade_poweredby.svg)
 
 [![Freqtrade CI](https://github.com/freqtrade/freqtrade/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/freqtrade/freqtrade/actions/workflows/ci.yml)

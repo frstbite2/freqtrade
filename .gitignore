@@ -122,3 +122,6 @@ target/
 !config_examples/config_freqai.example.json
 
 docker-compose-*.yml
+
+# AI trading platform runtime data (database, SEC cache)
+/data/
