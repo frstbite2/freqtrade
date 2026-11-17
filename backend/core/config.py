@@ -1,6 +1,7 @@
 """Configuration: non-secret settings from config/*.yaml, secrets only from the environment."""
 
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -160,10 +161,16 @@ def get_settings() -> Settings:
 
 
 # Secrets that are not provider credentials: redacted, but not listed as providers.
-OTHER_SECRET_ENV_VARS = ("POSTGRES_PASSWORD",)
+# SEC_USER_AGENT holds the operator's name and contact email, which SEC requires.
+OTHER_SECRET_ENV_VARS = ("POSTGRES_PASSWORD", "SEC_USER_AGENT")
+_EMAIL = re.compile(r"[^\s<>()\[\],;\"']+@[^\s<>()\[\],;\"']+")
 
 
 def secret_values() -> list[str]:
     """Current secret values, used by the redactor for logs and stored error messages."""
     names = [v for env in SECRET_ENV_VARS.values() for v in env] + list(OTHER_SECRET_ENV_VARS)
-    return [os.environ[n] for n in names if os.environ.get(n)]
+    values = [os.environ[n] for n in names if os.environ.get(n)]
+    # The contact address alone is personal data too, wherever it appears without the name.
+    values += _EMAIL.findall(os.environ.get("SEC_USER_AGENT", ""))
+    # Longest first, so a value that contains another is replaced whole.
+    return sorted(set(values), key=len, reverse=True)

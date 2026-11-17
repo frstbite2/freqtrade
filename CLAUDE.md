@@ -45,7 +45,8 @@ cd backend && ALPACA_LIVE_TESTS=1 ALPACA_API_KEY=... ALPACA_SECRET_KEY=... ../.v
   explicitly authorizes the Milestone 7 live gate.
 - The risk engine is independent; the decision engine can never override hard limits.
 - Secrets come from environment variables only. Never in YAML, code, logs, or API responses.
-  New secrets are registered in `SECRET_ENV_VARS` (`backend/core/config.py`) so they are redacted,
+  New secrets are registered in `SECRET_ENV_VARS` (`backend/core/config.py`; personal or
+  non-provider values such as `SEC_USER_AGENT` in `OTHER_SECRET_ENV_VARS`) so they are redacted,
   and added to `.env.example` with an empty placeholder.
 - Never fabricate market data, filings, or results. If a provider is not configured, report
   "unavailable" — distinct from zero activity. No silent simulated-data fallbacks.

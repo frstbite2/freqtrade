@@ -1,5 +1,7 @@
 import json
 import logging
+import re
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -104,6 +106,37 @@ def test_secrets_redacted_from_logs(monkeypatch):
     assert redact("postgresql://user:pw123@db:5432/x") == "postgresql://user:***@db:5432/x"
 
 
+# A made-up contact (example.org is reserved for documentation); never a real person's details.
+SEC_UA = "Jane Example jane.example@example.org"
+
+
+def test_sec_user_agent_and_its_email_are_redacted(monkeypatch):
+    monkeypatch.setenv("SEC_USER_AGENT", SEC_UA)
+    assert redact(f"ua={SEC_UA}") == "ua=***"
+    assert redact("write to jane.example@example.org today") == "write to *** today"
+    try:
+        raise RuntimeError(f"SEC refused {SEC_UA}")
+    except RuntimeError:
+        args = ("jane.example@example.org",)
+        record = logging.LogRecord("x", logging.ERROR, "", 0, "failed for %s", args, sys.exc_info())
+    out = JsonFormatter().format(record)
+    assert "example.org" not in out and "Jane Example" not in out
+
+
+def test_every_recorded_failure_reason_is_redacted():
+    """Failure reasons are stored and served by the API, so each one passes through redact()."""
+    services = REPO_ROOT / "backend" / "services"
+    assignment = re.compile(r"\.failed\[[^\]]+\]\s*=(?!=)")
+    unredacted = [
+        f"{path.relative_to(REPO_ROOT)}:{n}"
+        for path in services.rglob("*.py")
+        for n, line in enumerate(path.read_text().splitlines(), 1)
+        if assignment.search(line) and "redact(" not in line
+    ]
+    sites = sum(len(assignment.findall(p.read_text())) for p in services.rglob("*.py"))
+    assert unredacted == [] and sites >= 3
+
+
 # --- API + database ---
 
 
@@ -134,6 +167,14 @@ def test_status_and_config_hide_secrets(client, monkeypatch):
     assert status.json()["providers_configured"]["polygon"] is True
     assert cfg.json()["risk"]["risk_per_trade_pct"] == 0.5
     assert "supersecretvalue" not in status.text + cfg.text and TOKEN not in status.text + cfg.text
+
+
+def test_api_never_returns_the_sec_user_agent(client, monkeypatch):
+    monkeypatch.setenv("SEC_USER_AGENT", SEC_UA)
+    h = {"Authorization": f"Bearer {TOKEN}"}
+    paths = ("/api/v1/status", "/api/v1/config", "/api/v1/jobs", "/api/v1/health/ingestion")
+    bodies = [client.get(path, headers=h).text for path in paths] + [client.get("/health").text]
+    assert not any("example.org" in body or "Jane Example" in body for body in bodies)
 
 
 def test_startup_and_shutdown_are_audited(tmp_path, monkeypatch):

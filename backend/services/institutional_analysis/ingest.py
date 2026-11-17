@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.config import get_settings
-from backend.core.logging import setup_logging
+from backend.core.logging import redact, setup_logging
 from backend.database.locks import add_wait_option, sec_ingestion
 from backend.database.session import commit_new, init_db, make_engine
 from backend.models import record_audit
@@ -76,7 +76,7 @@ def ingest_manager(session: Session, client: EdgarClient, cik: int, since: date)
                 logger.warning("%s stored with issues: %s", ref.accession, parsed.issues)
         except (EdgarError, Form13FError) as exc:
             session.rollback()
-            report.failed[ref.accession] = str(exc)
+            report.failed[ref.accession] = redact(str(exc))
             logger.warning("skipped %s: %s", ref.accession, exc)
 
     manager = session.get(InstitutionalManager, cik)

@@ -645,6 +645,9 @@ at the end of each worker pass that ran jobs and is itself written to the audit 
 - Error text stored for job runs (and so served by the jobs and health endpoints) is redacted
   like the logs: secret values and passwords in connection URLs become `***`.
   `POSTGRES_PASSWORD` is now redacted too.
+- `SEC_USER_AGENT` (the operator's name and contact email) is redacted the same way, and its
+  email address on its own as well; per-filing failure reasons are redacted where they are recorded,
+  so stored job results, the jobs API and the ingest commands' output never carry it.
 - The compose file publishes the API on `127.0.0.1` only and does not publish the database or the
   worker; a test fails if that changes. There is no remote access or public deployment.
 

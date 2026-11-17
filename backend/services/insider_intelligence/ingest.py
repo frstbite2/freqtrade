@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.config import get_settings
-from backend.core.logging import setup_logging
+from backend.core.logging import redact, setup_logging
 from backend.database.locks import add_wait_option, sec_ingestion
 from backend.database.session import commit_new, init_db, make_engine
 from backend.models import record_audit
@@ -103,7 +103,7 @@ def ingest_issuer(session: Session, client: EdgarClient, ticker: str, since: dat
                     report.already_stored += 1
             except (EdgarError, FilingParseError) as exc:
                 session.rollback()
-                report.failed[ref.accession] = str(exc)
+                report.failed[ref.accession] = redact(str(exc))
                 logger.warning("skipped %s: %s", ref.accession, exc)
 
     issuer = session.get(InsiderIssuer, cik)
