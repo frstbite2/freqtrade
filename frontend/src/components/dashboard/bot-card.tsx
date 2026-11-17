@@ -4,12 +4,12 @@ import { ChevronDown, Radar } from "lucide-react";
 import { useState } from "react";
 import { Sparkline } from "@/components/charts/sparkline";
 import { BotIcon } from "@/components/ui/bot-icon";
-import { Chip, DemoBadge, StatusDot } from "@/components/ui/badges";
+import { Chip, DemoBadge, LiveBadge, StatusDot } from "@/components/ui/badges";
 import { TokenIcon } from "@/components/ui/token-icon";
-import { Unavailable } from "@/components/ui/states";
-import { type BotIdentity, buildLabel } from "@/lib/bots";
+import type { BotIdentity } from "@/lib/bots";
 import { useDataMode } from "@/lib/data-mode";
 import { signedPct, signedUsd } from "@/lib/format";
+import { type Facts, readiness } from "@/lib/readiness";
 import { BOT_DEMO, TICKERS } from "@/lib/sample-data";
 import { BotDetails } from "./bot-details";
 
@@ -18,7 +18,7 @@ export const MIN_TRADES_FOR_WIN_RATE = 30;
 
 const colorOf = (symbol: string) => TICKERS.find((t) => t.symbol === symbol)?.color ?? "#a46bff";
 
-export function BotCard({ bot, index = 0 }: { bot: BotIdentity; index?: number }) {
+export function BotCard({ bot, index = 0, facts }: { bot: BotIdentity; index?: number; facts: Facts | null }) {
   const { mode } = useDataMode();
   const demo = mode === "demo";
   const stats = BOT_DEMO[bot.id];
@@ -59,7 +59,7 @@ export function BotCard({ bot, index = 0 }: { bot: BotIdentity; index?: number }
       </div>
 
       <div className="relative mt-4">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-3">Monitoring</p>
+        <p className="text-[11px] font-medium uppercase tracking-wider text-ink-3">{demo ? "Monitoring" : "Readiness (live)"}</p>
         {demo ? (
           <div className="mt-1.5 flex items-center gap-1.5">
             {stats.monitoring.map((s) => (
@@ -70,7 +70,7 @@ export function BotCard({ bot, index = 0 }: { bot: BotIdentity; index?: number }
             ))}
           </div>
         ) : (
-          <p className="mt-1.5 text-xs text-ink-3">Nothing: the bot is not running.</p>
+          <ReadinessList bot={bot} facts={facts} />
         )}
       </div>
 
@@ -94,16 +94,16 @@ export function BotCard({ bot, index = 0 }: { bot: BotIdentity; index?: number }
         <Metric label="Trades">{demo ? stats.trades : <span className="text-ink-3">0</span>}</Metric>
       </div>
 
-      <div className="relative mt-4 flex h-12 items-end">
-        {demo ? (
+      {demo ? (
+        <div className="relative mt-4 flex h-12 items-end">
           <div className="flex w-full items-end justify-between gap-3">
             <Sparkline values={stats.spark.map((p) => p.v)} color={stats.pnlPct >= 0 ? bot.g1 : "#ff5c7a"} width={180} height={44} className="h-11 w-full max-w-[200px]" />
             <span className={`tabular shrink-0 text-sm font-semibold ${stats.pnlPct >= 0 ? "text-mint" : "text-rose"}`}>{signedPct(stats.pnlPct, 1)}</span>
           </div>
-        ) : (
-          <Unavailable reason={buildLabel(bot.build)} compact />
-        )}
-      </div>
+        </div>
+      ) : (
+        <p className="relative mt-3 text-xs text-ink-3">P&amp;L and win rate appear once the paper broker records real simulated trades.</p>
+      )}
 
       {demo && (
         <p className="relative mt-3 flex items-center gap-1.5 truncate text-xs text-ink-2">
@@ -117,10 +117,12 @@ export function BotCard({ bot, index = 0 }: { bot: BotIdentity; index?: number }
           <div className="space-y-3 border-t border-line pt-4 text-xs">
             <List title="Looks for" items={bot.focus} color={bot.g1} />
             <List title="Signals" items={bot.signals} color={bot.g2} />
-            <p className="rounded-xl border border-line bg-white/[0.03] px-3 py-2 text-ink-3">
-              <span className="font-semibold text-ink-2">Real status: </span>
-              {buildLabel(bot.build)}
-            </p>
+            {demo && (
+              <div className="rounded-xl border border-line bg-white/[0.03] px-3 py-2">
+                <p className="mb-1.5 flex items-center justify-between font-semibold text-ink-2">Real status <LiveBadge /></p>
+                <ReadinessList bot={bot} facts={facts} />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -172,5 +174,24 @@ function List({ title, items, color }: { title: string; items: string[]; color: 
         ))}
       </ul>
     </div>
+  );
+}
+
+const DOT = { ready: "bg-mint", stale: "bg-gold", missing: "bg-ink-3/60", unknown: "bg-ink-3/30" } as const;
+
+/** Real readiness from the backend: data sources first, then the strategy itself. */
+function ReadinessList({ bot, facts }: { bot: BotIdentity; facts: Facts | null }) {
+  if (!facts) return <div className="skeleton mt-1.5 h-14" aria-label="Checking readiness" />;
+  return (
+    <ul className="mt-1.5 space-y-1 text-xs">
+      {readiness(bot, facts, Date.now()).map((r) => (
+        <li key={r.label} className="flex items-start gap-2">
+          <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${DOT[r.state]}`} aria-hidden />
+          <span className="min-w-0">
+            <span className="font-medium text-ink-2">{r.label}:</span> <span className="text-ink-3">{r.detail}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

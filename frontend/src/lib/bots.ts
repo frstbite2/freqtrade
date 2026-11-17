@@ -25,11 +25,16 @@ export interface BotIdentity {
   g2: string;
   glow: string;
   build: BuildState;
+  /** The data each bot's strategy will need; checked live against the backend (readiness.ts). */
+  needs: DataNeed[];
 }
+
+export type DataNeed = "market_data" | "sec_filings" | "onchain";
 
 export const BOTS: BotIdentity[] = [
   {
     id: "grok-sniper",
+    needs: ["market_data"],
     name: "Grok Sniper",
     icon: "crosshair",
     tagline: "Early breakout detection",
@@ -44,6 +49,7 @@ export const BOTS: BotIdentity[] = [
   },
   {
     id: "momentum-hunter",
+    needs: ["market_data"],
     name: "Momentum Hunter",
     icon: "rocket",
     tagline: "Strong trend tracking",
@@ -58,6 +64,7 @@ export const BOTS: BotIdentity[] = [
   },
   {
     id: "dip-hunter",
+    needs: ["market_data"],
     name: "Dip Hunter",
     icon: "anchor",
     tagline: "Oversold reversal scouting",
@@ -72,6 +79,7 @@ export const BOTS: BotIdentity[] = [
   },
   {
     id: "whale-watcher",
+    needs: ["onchain"],
     name: "Whale Watcher",
     icon: "waves",
     tagline: "Large-holder flow monitor",
@@ -86,6 +94,7 @@ export const BOTS: BotIdentity[] = [
   },
   {
     id: "insider",
+    needs: ["sec_filings", "market_data"],
     name: "Insider Intelligence",
     icon: "landmark",
     tagline: "SEC filings and ownership",
