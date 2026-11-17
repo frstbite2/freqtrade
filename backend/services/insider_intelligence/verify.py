@@ -29,6 +29,7 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from backend.core.config import get_settings
+from backend.core.logging import redact
 from backend.database.locks import add_wait_option, sec_ingestion
 from backend.database.session import make_engine
 from backend.services.edgar import EdgarClient, EdgarError
@@ -242,7 +243,7 @@ def _verify(opts: argparse.Namespace) -> None:
             parsed = parse_ownership_xml(match.group(1))
         except (EdgarError, FilingParseError) as exc:
             outcome["could_not_parse"] += 1
-            print(f"COULD NOT PARSE {accession}: {exc}")
+            print(redact(f"COULD NOT PARSE {accession}: {exc}"))
             continue
         differing, realigned = compare(parsed, {name: tables[name][accession] for name in names})
         outcome["mismatch" if differing else "realigned" if realigned else "match"] += 1

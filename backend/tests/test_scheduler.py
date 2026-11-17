@@ -3,6 +3,7 @@
 Ingestion itself runs on the real SEC fixtures; schedules and clocks are set by the tests.
 """
 
+import json
 import threading
 from datetime import UTC, datetime, timedelta
 
@@ -142,6 +143,28 @@ def test_failed_filings_make_the_run_partial_and_are_retried(db_session, tmp_pat
         1,
         {},
     )
+
+
+def test_stored_failure_reasons_never_contain_the_sec_user_agent(
+    db_session, tmp_path, factory, monkeypatch
+):
+    ua = "Jane Example jane.example@example.org"  # made up; example.org is reserved
+    monkeypatch.setenv("SEC_USER_AGENT", ua)
+    from backend.services.beneficial_ownership import ingest as beneficial
+
+    real = beneficial._to_model
+
+    def failing(cik, ref, parsed, filer):  # a parser error that quotes the User-Agent
+        if ref.accession == "0000921895-26-002474":
+            raise beneficial.ScheduleParseError(f"rejected for {ua}")
+        return real(cik, ref, parsed, filer)
+
+    monkeypatch.setattr(beneficial, "_to_model", failing)
+    settings = settings_with(tmp_path, "watchlist: [GME]\n")
+    run = scheduler.run_job(db_session, settings, "beneficial", factory(), NOW)
+    assert run.detail["GME"]["failed"] == {"0000921895-26-002474": "rejected for ***"}
+    stored = db_session.get(JobRun, run.id)
+    assert "example.org" not in json.dumps(stored.detail) + (stored.error or "")
 
 
 def test_total_failure_is_recorded_and_retried_sooner(db_session, settings, factory):

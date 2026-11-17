@@ -20,6 +20,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from backend.core.config import get_settings
+from backend.core.logging import redact
 from backend.database.locks import add_wait_option, sec_ingestion
 from backend.database.session import make_engine
 from backend.services.edgar import EdgarClient, EdgarError
@@ -141,7 +142,7 @@ def _verify(opts: argparse.Namespace) -> None:
             parsed = parse_13f(client.submission_text(int(sub["CIK"]), accession), filed)
         except (EdgarError, Form13FError) as exc:
             outcome["could_not_parse"] += 1
-            print(f"COULD NOT PARSE {accession}: {exc}")
+            print(redact(f"COULD NOT PARSE {accession}: {exc}"))
             continue
         differing = compare(parsed, {name: tables[name][accession] for name in tables})
         rows_checked += len(parsed.rows)
