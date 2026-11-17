@@ -123,6 +123,47 @@ def test_sec_user_agent_and_its_email_are_redacted(monkeypatch):
     assert "example.org" not in out and "Jane Example" not in out
 
 
+def test_command_line_output_never_shows_the_sec_user_agent(tmp_path, monkeypatch, capsys):
+    """The ingest command's failure lines, and a crash's traceback, are redacted."""
+    from backend.core.logging import redacted_excepthook
+    from backend.services.insider_intelligence import ingest
+
+    root = logging.getLogger()  # setup_logging replaces these; put them back afterwards
+    monkeypatch.setattr(root, "handlers", list(root.handlers))
+    monkeypatch.setattr(root, "level", root.level)
+    monkeypatch.setattr(sys, "excepthook", sys.__excepthook__)
+    monkeypatch.setenv("SEC_USER_AGENT", SEC_UA)
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path}/cli.sqlite")
+    monkeypatch.setattr(ingest, "get_settings", lambda: load_settings())
+    monkeypatch.setattr(sys, "argv", ["ingest", "GME", "--since", "2026-01-01"])
+
+    def fake_ingest(session, client, ticker, since):  # a reason that was never redacted upstream
+        failed = {"0000000000-26-000001": f"SEC refused {SEC_UA}"}
+        return ingest.IngestReport(ticker, 1326380, "GameStop Corp.", since, failed=failed)
+
+    monkeypatch.setattr(ingest, "ingest_issuer", fake_ingest)
+    ingest.main()
+    try:
+        raise RuntimeError(f"crashed while using {SEC_UA}")
+    except RuntimeError:
+        redacted_excepthook(*sys.exc_info())
+    out = capsys.readouterr()
+    assert "FAILED 0000000000-26-000001: SEC refused ***" in out.out
+    assert "crashed while using ***" in out.err
+    assert "example.org" not in out.out + out.err and "Jane Example" not in out.out + out.err
+
+
+def test_logging_setup_installs_the_redacting_crash_handler(monkeypatch):
+    from backend.core.logging import redacted_excepthook, setup_logging
+
+    root = logging.getLogger()  # setup_logging replaces these; put them back afterwards
+    monkeypatch.setattr(root, "handlers", list(root.handlers))
+    monkeypatch.setattr(root, "level", root.level)
+    monkeypatch.setattr(sys, "excepthook", sys.__excepthook__)
+    setup_logging("INFO", json_format=False)
+    assert sys.excepthook is redacted_excepthook
+
+
 def test_every_recorded_failure_reason_is_redacted():
     """Failure reasons are stored and served by the API, so each one passes through redact()."""
     services = REPO_ROOT / "backend" / "services"

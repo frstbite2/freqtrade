@@ -214,7 +214,7 @@ def main() -> None:
                     f"{len(r.failed)} failed"
                 )
                 for accession, reason in r.failed.items():
-                    print(f"  FAILED {accession}: {reason}")
+                    print(redact(f"  FAILED {accession}: {reason}"))
     finally:
         client.close()
 

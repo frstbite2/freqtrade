@@ -3,6 +3,8 @@
 import json
 import logging
 import re
+import sys
+import traceback
 from datetime import UTC, datetime
 
 from backend.core.config import secret_values
@@ -36,6 +38,10 @@ class RedactingFormatter(logging.Formatter):
         return redact(super().format(record))
 
 
+def redacted_excepthook(kind, value, tb) -> None:
+    sys.stderr.write(redact("".join(traceback.format_exception(kind, value, tb))))
+
+
 def setup_logging(level: str = "INFO", json_format: bool = True) -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(
@@ -46,3 +52,5 @@ def setup_logging(level: str = "INFO", json_format: bool = True) -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
+    # An uncaught error's traceback bypasses the log formatter; redact it the same way.
+    sys.excepthook = redacted_excepthook

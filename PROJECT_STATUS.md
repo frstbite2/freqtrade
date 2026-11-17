@@ -646,8 +646,11 @@ at the end of each worker pass that ran jobs and is itself written to the audit 
   like the logs: secret values and passwords in connection URLs become `***`.
   `POSTGRES_PASSWORD` is now redacted too.
 - `SEC_USER_AGENT` (the operator's name and contact email) is redacted the same way, and its
-  email address on its own as well; per-filing failure reasons are redacted where they are recorded,
-  so stored job results, the jobs API and the ingest commands' output never carry it.
+  email address on its own as well, in: logs (both formatters), stored job errors and per-filing
+  failure reasons (redacted where they are recorded), API responses, the ingest and verify
+  commands' printed output, and tracebacks of uncaught errors (`setup_logging` installs a
+  redacting `sys.excepthook`). Regression tests cover each place (`test_foundation.py`,
+  `test_scheduler.py`); the value is never stored in the database.
 - The compose file publishes the API on `127.0.0.1` only and does not publish the database or the
   worker; a test fails if that changes. There is no remote access or public deployment.
 
